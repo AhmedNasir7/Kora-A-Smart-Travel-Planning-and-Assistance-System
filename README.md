@@ -23,9 +23,3 @@ Travel planning is stressful because flight times, hotel check-ins, packing need
 - Database & Auth: Supabase
 - Notifications: Firebase Cloud Messaging (FCM)
 - Design: Figma + Canva
-
-## Out of Scope (for this prototype)
-- No flight/hotel booking
-- No real-time ticket purchase
-- No integration with airline/hotel systems
-- No AI predictions using live external data
