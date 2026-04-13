@@ -1,8 +1,44 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Base Colors */
+  --background: hsl(220, 20%, 5%);
+  --foreground: hsl(0, 0%, 98%);
+  --card: hsl(220, 20%, 8%);
+  --card-foreground: hsl(0, 0%, 98%);
+  
+  /* Primary Accent (Coral-orange) */
+  --primary: hsl(12, 80%, 65%);
+  --primary-foreground: hsl(220, 20%, 7%);
+  
+  /* Secondary */
+  --secondary: hsl(220, 15%, 15%);
+  --secondary-foreground: hsl(0, 0%, 90%);
+  
+  /* Muted */
+  --muted: hsl(220, 15%, 12%);
+  --muted-foreground: hsl(220, 10%, 45%);
+  
+  /* Borders and Inputs */
+  --border: hsl(220, 15%, 14%);
+  --input: hsl(220, 15%, 12%);
+  --ring: hsl(12, 80%, 65%);
+  
+  /* Status Colors */
+  --destructive: hsl(0, 72%, 51%);
+  --destructive-foreground: hsl(40, 20%, 95%);
+  
+  /* Kora Specific */
+  --kora-glow: hsl(12, 80%, 65%);
+  --kora-surface: hsl(220, 16%, 10%);
+  --kora-surface-hover: hsl(220, 16%, 14%);
+  --kora-text-dim: hsl(220, 10%, 45%);
+  --kora-success: hsl(160, 60%, 45%);
+  --kora-warning: hsl(38, 92%, 60%);
+  
+  /* Fonts */
+  --font-geist-sans: "Poppins", sans-serif;
+  --font-geist-mono: "JetBrains Mono", monospace;
 }
 
 @theme inline {
@@ -12,15 +48,59 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: hsl(220, 20%, 5%);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-geist-sans);
+    background: radial-gradient(circle at 0% 0%, hsla(12, 80%, 65%, 0.12) 0%, transparent 45%),
+                linear-gradient(to bottom right, hsl(220, 20%, 5%), hsl(220, 20%, 3%));
+    background-attachment: fixed;
+    overflow-x: hidden;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUpSm {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUpMd {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 500ms ease-out forwards;
+  }
+
+  .animate-slide-up-sm {
+    animation: slideUpSm 400ms ease-out forwards;
+  }
+
+  .animate-slide-up-md {
+    animation: slideUpMd 600ms ease-out forwards;
+  }
+  
+  .glass-card {
+    @apply bg-[hsla(220,20%,10%,0.7)] backdrop-blur-xl border border-[hsla(0,0%,100%,0.08)];
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70;
+  }
 }
