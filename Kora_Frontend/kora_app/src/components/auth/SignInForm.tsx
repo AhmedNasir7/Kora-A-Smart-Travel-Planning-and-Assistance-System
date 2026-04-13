@@ -6,12 +6,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { signInSchema, type SignInFormData } from '@/lib/validations/auth';
 import { authConfig } from '@/lib/auth-config';
+import { useAuth } from '@/hooks/useAuth';
 import { FormInput } from './FormInput';
 import { FormCheckbox } from './FormCheckbox';
 import { OAuthButton } from './OAuthButton';
 
 export function SignInForm() {
-  const [isLoading, setIsLoading] = useState(false);
+  const { signIn, isLoading } = useAuth();
+  const [apiError, setApiError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -21,16 +23,10 @@ export function SignInForm() {
   });
 
   const onSubmit = async (data: SignInFormData) => {
-    setIsLoading(true);
-    try {
-      // TODO: Call useSignIn hook here
-      console.log('Sign in data:', data);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    } catch (error) {
-      console.error('Sign in error:', error);
-    } finally {
-      setIsLoading(false);
+    setApiError(null);
+    const result = await signIn(data.email, data.password);
+    if (!result.ok) {
+      setApiError(result.error || 'Failed to sign in. Please try again.');
     }
   };
 
@@ -67,6 +63,12 @@ export function SignInForm() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-3 space-y-2.5">
+        {apiError && (
+          <div className="rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400 border border-red-500/20">
+            {apiError}
+          </div>
+        )}
+
         <FormInput
           label={authConfig.labels.email}
           placeholder={authConfig.placeholders.email}

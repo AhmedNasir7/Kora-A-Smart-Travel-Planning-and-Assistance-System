@@ -6,12 +6,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { signUpSchema, type SignUpFormData } from '@/lib/validations/auth';
 import { authConfig } from '@/lib/auth-config';
+import { useAuth } from '@/hooks/useAuth';
 import { FormInput } from './FormInput';
 import { FormCheckbox } from './FormCheckbox';
 import { OAuthButton } from './OAuthButton';
 
 export function SignUpForm() {
-  const [isLoading, setIsLoading] = useState(false);
+  const { signUp, isLoading } = useAuth();
+  const [apiError, setApiError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -21,16 +23,10 @@ export function SignUpForm() {
   });
 
   const onSubmit = async (data: SignUpFormData) => {
-    setIsLoading(true);
-    try {
-      // TODO: Call useSignUp hook here
-      console.log('Sign up data:', data);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    } catch (error) {
-      console.error('Sign up error:', error);
-    } finally {
-      setIsLoading(false);
+    setApiError(null);
+    const result = await signUp(data.email, data.password, data.fullName);
+    if (!result.ok) {
+      setApiError(result.error || 'Failed to create account. Please try again.');
     }
   };
 
@@ -67,6 +63,12 @@ export function SignUpForm() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-3 space-y-2">
+        {apiError && (
+          <div className="rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400 border border-red-500/20">
+            {apiError}
+          </div>
+        )}
+
         <FormInput
           label={authConfig.labels.fullName}
           placeholder={authConfig.placeholders.fullName}
