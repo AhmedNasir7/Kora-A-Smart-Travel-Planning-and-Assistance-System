@@ -34,11 +34,11 @@ export function Header() {
         </nav>
 
         {/* Auth - Right */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
           <Link href="/signin" className="text-[13px] font-medium text-[#a9a59b] hover:text-white transition-colors">
             Sign In
           </Link>
-          <Link href="/signup" className="px-6 py-2.5 bg-[#FF7B54] hover:bg-[#ff8a5b] text-white text-[13px] font-semibold rounded-lg transition-all">
+          <Link href="/signup" className="px-7 py-2.5 bg-[#FF7B54] hover:bg-[#FF9F6F] text-white text-[13px] font-semibold rounded-full transition-all shadow-lg shadow-[#FF7B54]/30 hover:shadow-[#FF7B54]/50 duration-200">
             Get Started
           </Link>
         </div>

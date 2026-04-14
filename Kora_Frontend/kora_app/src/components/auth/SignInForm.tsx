@@ -97,7 +97,7 @@ export function SignInForm() {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full rounded-xl bg-[#ff6b35] px-4 py-3 text-[14px] font-semibold tracking-wide text-[#0f1323] shadow-[0_0_24px_rgba(255,107,53,0.18)] transition-all duration-200 hover:bg-[#ff8a5b] disabled:cursor-not-allowed disabled:bg-[#ff6b35]/50"
+          className="w-full rounded-full bg-[#ff6b35] px-4 py-3 text-[14px] font-semibold tracking-wide text-[#0f1323] shadow-lg shadow-[#ff6b35]/40 transition-all duration-200 hover:bg-[#ff8a5b] hover:shadow-xl hover:shadow-[#ff6b35]/60 disabled:cursor-not-allowed disabled:bg-[#ff6b35]/50"
         >
           {isLoading ? 'Signing in...' : authConfig.labels.signIn}
         </button>

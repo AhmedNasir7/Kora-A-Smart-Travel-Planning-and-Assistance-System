@@ -1,4 +1,4 @@
-import { Header } from '@/components/landing/Header';
+import { Header } from '@/components/Header';
 import { Hero } from '@/components/landing/Hero';
 import { TripsSection } from '@/components/landing/TripsSection';
 import { PackingSection } from '@/components/landing/PackingSection';
@@ -21,7 +21,7 @@ export default function Home() {
 
       {/* Content */}
       <div className="relative z-10">
-        <Header />
+        <Header variant="landing" />
         <Hero />
         <TripsSection />
         <PackingSection />

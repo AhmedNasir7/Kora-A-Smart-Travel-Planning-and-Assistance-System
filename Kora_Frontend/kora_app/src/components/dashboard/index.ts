@@ -1,0 +1,9 @@
+export { DashboardHeader } from './DashboardHeader';
+export { StatsCard } from './StatsCard';
+export { UpcomingSection } from './UpcomingSection';
+export { QuickActions } from './QuickActions';
+export { ActiveTrip } from './ActiveTrip';
+export { DashboardFooter } from './DashboardFooter';
+export { TripsTab } from './TripsTab';
+export { TripCard } from './TripCard';
+export { AddTripModal } from './AddTripModal';

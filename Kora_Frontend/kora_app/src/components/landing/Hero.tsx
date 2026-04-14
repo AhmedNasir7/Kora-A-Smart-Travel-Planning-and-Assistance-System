@@ -33,7 +33,7 @@ export function Hero() {
             </div>
 
             {/* CTA Button */}
-            <Link href="/signup" className="inline-block px-8 py-3.5 bg-[#FF7B54] hover:bg-[#ff8a5b] text-white font-semibold rounded-lg transition-all shadow-[0_0_24px_rgba(255,123,84,0.3)]">
+            <Link href="/signup" className="inline-block px-8 py-3.5 bg-[#FF7B54] hover:bg-[#FF9F6F] text-white font-semibold rounded-full transition-all duration-200 shadow-lg shadow-[#FF7B54]/40 hover:shadow-xl hover:shadow-[#FF7B54]/60">
               Start Planning →
             </Link>
           </div>

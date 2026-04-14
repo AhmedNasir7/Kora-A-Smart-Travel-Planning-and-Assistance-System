@@ -11,6 +11,7 @@ interface AuthStore {
   setUser: (user: User) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: ApiError | null) => void;
+  setAuthenticated: (authenticated: boolean) => void;
   clearAuth: () => void;
   hydrate: () => void;
 }
@@ -31,6 +32,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   setError: (error: ApiError | null) => {
     set({ error });
+  },
+
+  setAuthenticated: (authenticated: boolean) => {
+    set({ isAuthenticated: authenticated });
   },
 
   clearAuth: () => {

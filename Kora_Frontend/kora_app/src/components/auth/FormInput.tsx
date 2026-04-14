@@ -15,9 +15,9 @@ export function FormInput({
   type = 'text',
   ...props
 }: FormInputProps) {
-  const baseClasses = 'w-full h-12 rounded-lg border bg-[#171c2b] px-4 text-sm font-medium text-[#f5f3eb] placeholder:text-[#7c808a] transition-all duration-200 focus:outline-none focus:ring-2';
+  const baseClasses = 'w-full h-12 rounded-xl border bg-[#171c2b] px-4 text-sm font-medium text-[#f5f3eb] placeholder:text-[#7c808a] transition-all duration-200 focus:outline-none focus:ring-1';
   const iconClasses = icon ? 'pl-10' : '';
-  const errorClasses = error ? 'border-[#ef4444]/60 focus:border-[#ef4444] focus:ring-[#ef4444]' : 'border-[#2a3344] hover:border-[#39465d] focus:border-[#ff6b35] focus:ring-[rgba(255,107,53,0.55)]';
+  const errorClasses = error ? 'border-[#ef4444]/60 focus:border-[#ef4444] focus:ring-[#ef4444]/30' : 'border-[#2a3344] hover:border-[#39465d] focus:border-[#ff6b35] focus:ring-[#ff6b35]/30';
   const inputClasses = `${baseClasses} ${iconClasses} ${errorClasses}`;
 
   return (

@@ -29,7 +29,7 @@ export default function RootLayout({
       lang="en"
       className={`${poppins.variable} ${jetBrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground overflow-y-auto">
+      <body className="min-h-full flex flex-col bg-background text-foreground overflow-y-auto" suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>
