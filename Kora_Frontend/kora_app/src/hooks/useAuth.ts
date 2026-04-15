@@ -26,10 +26,17 @@ export function useAuth() {
   const { setUser, setError: setAuthError, clearAuth } = useAuthStore();
   const supabase = createClient();
 
+  const navigateToDashboard = async () => {
+    // Ensure the latest auth state is available before route middleware checks.
+    await supabase.auth.getSession();
+    router.replace('/dashboard');
+    router.refresh();
+  };
+
   const signUp = async (
     email: string,
     password: string,
-    fullName: string,
+    username: string,
   ): Promise<AuthActionResult> => {
     setIsLoading(true);
     setError(null);
@@ -39,7 +46,8 @@ export function useAuth() {
         password,
         options: {
           data: {
-            full_name: fullName,
+            full_name: username,
+            username,
           },
         },
       });
@@ -62,18 +70,21 @@ export function useAuth() {
             email: existingSession.user.email ?? email,
             fullName:
               (existingSession.user.user_metadata?.full_name as string) ||
-              fullName,
+              username,
+            username:
+              (existingSession.user.user_metadata?.username as string) ||
+              username,
             createdAt: existingSession.user.created_at,
             updatedAt:
               existingSession.user.updated_at ?? existingSession.user.created_at,
           });
 
-          router.push('/dashboard');
+          await navigateToDashboard();
           return { ok: true };
         }
 
         // Fallback for providers that throttle confirmation emails.
-        await apiService.signup(email, password, fullName);
+        await apiService.signup(email, password, username);
 
         const { data: signInData, error: signInError } =
           await supabase.auth.signInWithPassword({
@@ -92,13 +103,15 @@ export function useAuth() {
             id: signInData.user.id,
             email: signInData.user.email ?? email,
             fullName:
-              (signInData.user.user_metadata?.full_name as string) || fullName,
+              (signInData.user.user_metadata?.full_name as string) || username,
+            username:
+              (signInData.user.user_metadata?.username as string) || username,
             createdAt: signInData.user.created_at,
             updatedAt: signInData.user.updated_at ?? signInData.user.created_at,
           });
         }
 
-        router.push('/dashboard');
+        await navigateToDashboard();
         return { ok: true };
       }
 
@@ -106,13 +119,14 @@ export function useAuth() {
         setUser({
           id: data.user.id,
           email: data.user.email ?? email,
-          fullName: (data.user.user_metadata?.full_name as string) || fullName,
+          fullName: (data.user.user_metadata?.full_name as string) || username,
+          username: (data.user.user_metadata?.username as string) || username,
           createdAt: data.user.created_at,
           updatedAt: data.user.updated_at ?? data.user.created_at,
         });
       }
 
-      router.push('/dashboard');
+      await navigateToDashboard();
       return { ok: true };
     } catch (err) {
       const rawMessage = err instanceof Error ? err.message : 'Sign up failed';
@@ -155,12 +169,44 @@ export function useAuth() {
         });
       }
 
-      router.push('/dashboard');
+      await navigateToDashboard();
       return { ok: true };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Sign in failed';
       setError(message);
       setAuthError({ code: 'SIGNIN_ERROR', message, statusCode: 401 });
+      return { ok: false, error: message };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const signInWithGoogle = async (): Promise<AuthActionResult> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const redirectTo =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/auth/callback`
+          : undefined;
+
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+        },
+      });
+
+      if (oauthError) {
+        throw oauthError;
+      }
+
+      return { ok: true };
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Google sign in failed';
+      setError(message);
+      setAuthError({ code: 'GOOGLE_SIGNIN_ERROR', message, statusCode: 401 });
       return { ok: false, error: message };
     } finally {
       setIsLoading(false);
@@ -173,5 +219,5 @@ export function useAuth() {
     router.push('/');
   };
 
-  return { signUp, signIn, signOut, isLoading, error };
+  return { signUp, signIn, signInWithGoogle, signOut, isLoading, error };
 }

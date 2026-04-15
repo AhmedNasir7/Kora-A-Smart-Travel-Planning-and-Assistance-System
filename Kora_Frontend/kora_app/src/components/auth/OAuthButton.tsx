@@ -16,6 +16,7 @@ export function OAuthButton({
 }: OAuthButtonProps) {
   return (
     <button
+      type={props.type ?? 'button'}
       className="flex w-full items-center justify-center gap-3 rounded-full border border-[#2a3344] bg-[#171c2b] px-4 py-3 text-sm font-semibold text-[#f5f3eb] transition-all duration-200 hover:border-[#ff6b35]/30 hover:bg-[#1f2436] hover:shadow-lg hover:shadow-[#ff6b35]/20 focus:outline-none focus:ring-1 focus:ring-[#ff6b35]/30 disabled:cursor-not-allowed disabled:opacity-50"
       disabled={isLoading}
       {...props}

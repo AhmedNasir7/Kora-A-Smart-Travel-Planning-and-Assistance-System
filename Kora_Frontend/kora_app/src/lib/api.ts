@@ -21,6 +21,52 @@ export interface ErrorResponse {
   statusCode?: number;
 }
 
+export interface DashboardStat {
+  label: string;
+  value: string | number;
+  subtext?: string;
+}
+
+export type DashboardEventColor = 'green' | 'orange' | 'blue';
+
+export interface DashboardUpcomingEvent {
+  id: string;
+  date: string;
+  time: string;
+  title: string;
+  code?: string;
+  color: DashboardEventColor;
+}
+
+export type DashboardQuickActionIcon =
+  | 'trips'
+  | 'packing'
+  | 'documents'
+  | 'reminders';
+
+export interface DashboardQuickAction {
+  label: string;
+  href: string;
+  icon: DashboardQuickActionIcon;
+}
+
+export interface DashboardActiveTrip {
+  location: string;
+  country: string;
+  startDate: string;
+  endDate: string;
+  progress: number;
+  label: string;
+}
+
+export interface DashboardResponse {
+  welcomeMessage: string;
+  stats: DashboardStat[];
+  upcomingEvents: DashboardUpcomingEvent[];
+  quickActions: DashboardQuickAction[];
+  activeTrip: DashboardActiveTrip;
+}
+
 class ApiService {
   private baseUrl = API_BASE_URL;
 
@@ -40,11 +86,15 @@ class ApiService {
     return data as T;
   }
 
-  async signup(email: string, password: string, fullName: string): Promise<AuthResponse> {
+  async signup(
+    email: string,
+    password: string,
+    username: string,
+  ): Promise<AuthResponse> {
     const response = await fetch(`${this.baseUrl}/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, fullName }),
+      body: JSON.stringify({ email, password, username }),
     });
 
     return this.handleResponse<AuthResponse>(response);
@@ -78,6 +128,17 @@ class ApiService {
     }
 
     return response.json();
+  }
+
+  async getDashboard(firstName?: string): Promise<DashboardResponse> {
+    const query = firstName
+      ? `?firstName=${encodeURIComponent(firstName)}`
+      : '';
+    const response = await fetch(`${this.baseUrl}/dashboard${query}`, {
+      cache: 'no-store',
+    });
+
+    return this.handleResponse<DashboardResponse>(response);
   }
 }
 

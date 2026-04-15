@@ -3,6 +3,7 @@ export const authConfig = {
     email: 'Email address',
     password: 'Password',
     fullName: 'Full Name',
+    username: 'Username',
     confirmPassword: 'Confirm Password',
     rememberMe: 'Remember me',
     signIn: 'Sign In',
@@ -13,6 +14,7 @@ export const authConfig = {
     email: 'you@example.com',
     password: '••••••••',
     fullName: 'John Doe',
+    username: 'john_doe',
   },
   links: {
     forgotPassword: 'Forgot password?',

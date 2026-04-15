@@ -61,16 +61,53 @@ export class AuthService {
       throw new ServiceUnavailableException(this.configErrorMessage);
     }
 
-    const { email, password, fullName } = signupDto;
+    const { email, password, fullName, username } = signupDto;
+    const displayName = fullName?.trim() || username;
 
     try {
+      if (this.canUseAdminApi) {
+        const { data: existingUsersData, error: listUsersError } =
+          await this.supabase.auth.admin.listUsers({
+            page: 1,
+            perPage: 1000,
+          });
+
+        if (listUsersError) {
+          throw new BadRequestException(listUsersError.message);
+        }
+
+        const normalizedEmail = email.trim().toLowerCase();
+        const normalizedUsername = username.trim().toLowerCase();
+
+        const isEmailTaken = existingUsersData.users.some(
+          (user) => user.email?.trim().toLowerCase() === normalizedEmail,
+        );
+        const isUsernameTaken = existingUsersData.users.some((user) => {
+          const existingUsername =
+            user.user_metadata && typeof user.user_metadata === 'object'
+              ? (user.user_metadata['username'] as string | undefined)
+              : undefined;
+
+          return existingUsername?.trim().toLowerCase() === normalizedUsername;
+        });
+
+        if (isEmailTaken) {
+          throw new BadRequestException('Email already registered');
+        }
+
+        if (isUsernameTaken) {
+          throw new BadRequestException('Username already taken');
+        }
+      }
+
       const { data, error } = this.canUseAdminApi
         ? await this.supabase.auth.admin.createUser({
             email,
             password,
             email_confirm: true,
             user_metadata: {
-              full_name: fullName,
+              full_name: displayName,
+              username,
             },
           })
         : await this.supabase.auth.signUp({
@@ -78,7 +115,8 @@ export class AuthService {
             password,
             options: {
               data: {
-                full_name: fullName,
+                full_name: displayName,
+                username,
               },
             },
           });
@@ -89,6 +127,9 @@ export class AuthService {
           error.message.includes('already registered')
         ) {
           throw new BadRequestException('Email already registered');
+        }
+        if (error.message.toLowerCase().includes('username')) {
+          throw new BadRequestException('Username already taken');
         }
         throw new BadRequestException(error.message);
       }

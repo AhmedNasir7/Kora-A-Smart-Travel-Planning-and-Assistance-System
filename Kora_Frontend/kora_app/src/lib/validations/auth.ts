@@ -13,10 +13,14 @@ export const signInSchema = z.object({
 });
 
 export const signUpSchema = z.object({
-  fullName: z
+  username: z
     .string()
-    .min(1, 'Full name is required')
-    .min(2, 'Full name must be at least 2 characters'),
+    .min(1, 'Username is required')
+    .min(3, 'Username must be at least 3 characters')
+    .regex(
+      /^[a-zA-Z0-9_]+$/,
+      'Username can only contain letters, numbers, and underscores',
+    ),
   email: z
     .string()
     .min(1, 'Email is required')

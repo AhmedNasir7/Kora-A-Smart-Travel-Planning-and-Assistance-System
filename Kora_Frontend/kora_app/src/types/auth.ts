@@ -9,7 +9,7 @@ export interface SignInDto {
 export interface SignUpDto {
   email: string;
   password: string;
-  fullName: string;
+  username: string;
   rememberMe?: boolean;
 }
 
@@ -17,6 +17,7 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
+  username?: string;
   avatarUrl?: string;
   createdAt: string;
   updatedAt: string;

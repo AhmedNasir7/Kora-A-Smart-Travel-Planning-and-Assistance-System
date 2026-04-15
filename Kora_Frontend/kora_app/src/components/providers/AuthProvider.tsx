@@ -20,6 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             id: user.id,
             email: user.email ?? '',
             fullName: (user.user_metadata?.full_name as string) || '',
+            username: (user.user_metadata?.username as string) || '',
             createdAt: user.created_at ?? new Date().toISOString(),
             updatedAt: user.updated_at ?? new Date().toISOString(),
           });

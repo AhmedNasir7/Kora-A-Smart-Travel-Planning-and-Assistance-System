@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { LandingModule } from './landing/landing.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { LandingModule } from './landing/landing.module';
     }),
     AuthModule,
     LandingModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
