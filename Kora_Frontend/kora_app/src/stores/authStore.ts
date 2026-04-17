@@ -23,6 +23,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   isAuthenticated: false,
 
   setUser: (user: User) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('kora_user_id', user.id);
+    }
     set({ user, isAuthenticated: true, error: null });
   },
 
@@ -39,6 +42,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   clearAuth: () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('kora_user_id');
+    }
     set({
       user: null,
       isAuthenticated: false,

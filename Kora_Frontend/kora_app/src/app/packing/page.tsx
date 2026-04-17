@@ -1,98 +1,244 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Header } from '@/components/Header';
 import { DashboardFooter } from '@/components/dashboard';
+import {
+  apiService,
+  CreatePackingItemPayload,
+  PackingCategory,
+  PackingCategorySummary,
+  PackingItem,
+  PackingOverviewResponse,
+} from '@/lib/api';
+import { resolvePreferredTrip, sanitizeTripId } from '@/lib/trip-context';
 
-interface PackingItem {
+type TripContext = {
   id: string;
-  category: string;
-  item: string;
-  packed: boolean;
-  priority: 'high' | 'medium' | 'low';
+  destination: string;
+  country: string;
+  startDate: string;
+  endDate: string;
+};
+
+const FALLBACK_OVERVIEW: PackingOverviewResponse = {
+  trip: {
+    title: 'Packing List',
+    subtitle: 'Choose a trip to view its packing checklist.',
+  },
+  progress: 0,
+  categories: [
+    { name: 'Clothing', icon: 'clothing', packed: 0, total: 0 },
+    { name: 'Electronics', icon: 'electronics', packed: 0, total: 0 },
+    { name: 'Health', icon: 'health', packed: 0, total: 0 },
+    { name: 'Essentials', icon: 'essentials', packed: 0, total: 0 },
+  ],
+  selectedCategory: 'Clothing',
+  items: [],
+};
+
+function CategoryIcon({ icon }: { icon: PackingCategorySummary['icon'] }) {
+  if (icon === 'electronics') {
+    return (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <rect x="3" y="5" width="18" height="12" rx="2" strokeWidth="1.8" />
+        <path d="M8 20h8" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (icon === 'health') {
+    return (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M10 14l-2 2a3 3 0 11-4-4l3-3a3 3 0 014 4L9 15" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M14 10l2-2a3 3 0 114 4l-3 3a3 3 0 01-4-4l2-2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path d="M8 7V5a4 4 0 118 0v2" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M5 8h14l-1 11a2 2 0 01-2 2H8a2 2 0 01-2-2L5 8z" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
-const CATEGORIES = [
-  { name: 'Clothing', icon: '👕' },
-  { name: 'Electronics', icon: '📦' },
-  { name: 'Health', icon: '⚕️' },
-  { name: 'Essentials', icon: '⭐' },
-  { name: 'Work', icon: '💼' },
-  { name: 'Weather', icon: '☂️' },
-];
-
 export default function PackingPage() {
-  const [items, setItems] = useState<PackingItem[]>([
-    { id: '1', category: 'Clothing', item: 'T-shirts (×4)', packed: true, priority: 'high' },
-    { id: '2', category: 'Clothing', item: 'Jeans (×2)', packed: true, priority: 'high' },
-    { id: '3', category: 'Clothing', item: 'Light jacket', packed: false, priority: 'medium' },
-    { id: '4', category: 'Clothing', item: 'Sneakers', packed: false, priority: 'medium' },
-    { id: '5', category: 'Clothing', item: 'Underwear (×5)', packed: true, priority: 'high' },
-    { id: '6', category: 'Clothing', item: 'Socks (×4)', packed: false, priority: 'medium' },
-    { id: '7', category: 'Electronics', item: 'Charger', packed: false, priority: 'high' },
-    { id: '8', category: 'Electronics', item: 'Adapter', packed: false, priority: 'high' },
-    { id: '9', category: 'Electronics', item: 'Headphones', packed: true, priority: 'medium' },
-    { id: '10', category: 'Electronics', item: 'Power bank', packed: true, priority: 'medium' },
-    { id: '11', category: 'Electronics', item: 'Cable', packed: false, priority: 'low' },
-    { id: '12', category: 'Health', item: 'Toothbrush', packed: true, priority: 'high' },
-    { id: '13', category: 'Health', item: 'Medications', packed: true, priority: 'high' },
-    { id: '14', category: 'Health', item: 'First aid kit', packed: false, priority: 'medium' },
-    { id: '15', category: 'Health', item: 'Sunscreen', packed: false, priority: 'medium' },
-    { id: '16', category: 'Essentials', item: 'Passport', packed: true, priority: 'high' },
-    { id: '17', category: 'Essentials', item: 'Wallet', packed: true, priority: 'high' },
-    { id: '18', category: 'Essentials', item: 'Travel insurance', packed: false, priority: 'high' },
-    { id: '19', category: 'Essentials', item: 'Boarding pass', packed: false, priority: 'high' },
-    { id: '20', category: 'Work', item: 'Laptop', packed: false, priority: 'high' },
-    { id: '21', category: 'Work', item: 'Notebook', packed: false, priority: 'low' },
-    { id: '22', category: 'Work', item: 'Pen', packed: false, priority: 'low' },
-    { id: '23', category: 'Weather', item: 'Umbrella', packed: false, priority: 'low' },
-    { id: '24', category: 'Weather', item: 'Rain jacket', packed: false, priority: 'medium' },
-  ]);
-
-  const [selectedCategory, setSelectedCategory] = useState('Clothing');
+  const [overview, setOverview] = useState<PackingOverviewResponse>(FALLBACK_OVERVIEW);
+  const [activeTrip, setActiveTrip] = useState<TripContext | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<PackingCategory>('Clothing');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [resolvedTripId, setResolvedTripId] = useState<string | null>(null);
+  const [tripIdParam, setTripIdParam] = useState<string | null>(null);
+  const [queryReady, setQueryReady] = useState(false);
+  const [modalValidationError, setModalValidationError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     item: '',
-    category: 'Clothing',
-    priority: 'medium' as 'high' | 'medium' | 'low',
+    category: 'Clothing' as PackingCategory,
   });
 
-  const getCategoryCount = (category: string) => {
-    const total = items.filter(i => i.category === category).length;
-    const packed = items.filter(i => i.category === category && i.packed).length;
-    return { packed, total };
+  useEffect(() => {
+    setTripIdParam(sanitizeTripId(new URLSearchParams(window.location.search).get('tripId')));
+    setQueryReady(true);
+  }, []);
+
+  const loadOverview = async (
+    category?: PackingCategory,
+    tripId?: string | null,
+  ) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiService.getPackingOverview(
+        category || selectedCategory,
+        tripId || resolvedTripId || undefined,
+      );
+      setOverview(response);
+      setSelectedCategory(response.selectedCategory);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load packing data');
+      setOverview(FALLBACK_OVERVIEW);
+      if (category) {
+        setSelectedCategory(category);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const selectedItems = items.filter(i => i.category === selectedCategory);
-  const selectedPacked = selectedItems.filter(i => i.packed).length;
-  const totalCount = items.length;
-  const packedCount = items.filter(i => i.packed).length;
+  useEffect(() => {
+    if (!queryReady) {
+      return;
+    }
 
-  const toggleItem = (id: string) => {
-    setItems(items.map((item) => (item.id === id ? { ...item, packed: !item.packed } : item)));
-  };
+    let mounted = true;
 
-  const handleAddItem = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newItem: PackingItem = {
-      id: Date.now().toString(),
-      item: formData.item,
-      category: formData.category,
-      packed: false,
-      priority: formData.priority,
+    const loadTripPacking = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const resolvedTrip = tripIdParam
+          ? await apiService.getTrip(tripIdParam)
+          : await resolvePreferredTrip();
+
+        if (!resolvedTrip) {
+          if (!mounted) {
+            return;
+          }
+
+          setActiveTrip(null);
+          setResolvedTripId(null);
+          setOverview(FALLBACK_OVERVIEW);
+          setError('No trips are available yet');
+          return;
+        }
+
+        const response = await apiService.getPackingOverview(selectedCategory, resolvedTrip.id);
+        if (!mounted) {
+          return;
+        }
+
+        setActiveTrip({
+          id: resolvedTrip.id,
+          destination: resolvedTrip.destination,
+          country: resolvedTrip.country,
+          startDate: resolvedTrip.startDate,
+          endDate: resolvedTrip.endDate,
+        });
+        setResolvedTripId(resolvedTrip.id);
+        setOverview(response);
+        setSelectedCategory(response.selectedCategory);
+        setFormData((prev) => ({ ...prev, category: response.selectedCategory }));
+      } catch (err) {
+        if (!mounted) {
+          return;
+        }
+
+        setError(err instanceof Error ? err.message : 'Failed to load packing data');
+        setOverview(FALLBACK_OVERVIEW);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
     };
-    setItems([...items, newItem]);
-    setFormData({ item: '', category: 'Clothing', priority: 'medium' });
-    setShowAddModal(false);
+
+    void loadTripPacking();
+
+    return () => {
+      mounted = false;
+    };
+  }, [queryReady, tripIdParam]);
+
+  const selectedItems = useMemo<PackingItem[]>(
+    () => overview.items,
+    [overview.items],
+  );
+
+  const handleCategorySelect = async (category: PackingCategory) => {
+    setSelectedCategory(category);
+    setFormData((prev) => ({ ...prev, category }));
+    await loadOverview(category, resolvedTripId);
+  };
+
+  const toggleItem = async (id: string) => {
+    try {
+      const response = await apiService.togglePackingItem(id, resolvedTripId || undefined);
+      setOverview(response);
+      setSelectedCategory(response.selectedCategory);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update item');
+    }
+  };
+
+  const handleAddItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedItemName = formData.item.trim();
+    if (!trimmedItemName) {
+      setModalValidationError('Item name is required.');
+      return;
+    }
+
+    setModalValidationError(null);
+    const payload: CreatePackingItemPayload = {
+      name: trimmedItemName,
+      category: formData.category,
+    };
+
+    try {
+      const response = await apiService.createPackingItem({
+        ...payload,
+        tripId: resolvedTripId || undefined,
+      });
+      setOverview(response);
+      setSelectedCategory(response.selectedCategory);
+      setFormData({ item: '', category: response.selectedCategory });
+      setModalValidationError(null);
+      setShowAddModal(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create item');
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value as any }));
+    if (name === 'item' && modalValidationError) {
+      setModalValidationError(null);
+    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const tripTitle = activeTrip ? `${activeTrip.destination}, ${activeTrip.country}` : overview.trip.title;
+  const tripSubtitle = activeTrip
+    ? `${activeTrip.startDate} - ${activeTrip.endDate}`
+    : overview.trip.subtitle;
+
   return (
-    <main className="min-h-screen bg-[#13151A] flex flex-col">
+    <main className="min-h-screen bg-[#040B18] flex flex-col select-none">
       {/* Background Gradients */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-[rgba(255,123,84,0.08)] blur-3xl" />
@@ -105,118 +251,122 @@ export default function PackingPage() {
 
         <div className="max-w-7xl mx-auto px-6 py-12 mt-16 flex-1 flex flex-col">
           {/* Header Section */}
-          <div className="mb-12">
-            <p className="text-sm text-[#FF7B54] font-semibold mb-2">Packing</p>
-            <h1 className="text-5xl font-bold text-white mb-2">Packing List</h1>
-            <p className="text-[#A0A5B8]">Tokyo, Japan — Mar 15-22</p>
+          <div className="mb-8">
+            <p className="text-[32px] leading-none text-[#FF7B54] font-semibold mb-2">Packing Lists</p>
+            <h1 className="text-6xl font-bold text-white mb-2">{tripTitle}</h1>
+            <p className="text-[#7D8598]">{tripSubtitle}</p>
           </div>
 
-          {/* Progress Bar */}
-          <div className="bg-gradient-to-br from-[#1A1D26] to-[#13151A] border border-[#2A2D35] rounded-2xl p-8 mb-12 shadow-lg hover:shadow-xl hover:shadow-[#FF7B54]/10 transition-all duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-base font-bold text-white mb-1">Overall Progress</h2>
-                <p className="text-sm text-[#A0A5B8]">{packedCount} of {totalCount} items packed</p>
-              </div>
-              <p className="text-4xl font-bold text-[#FF7B54]">{Math.round((packedCount / totalCount) * 100)}%</p>
+          {error && (
+            <div className="mb-6 text-sm text-[#FFB49F] border border-[#FF7B54]/30 bg-[#FF7B54]/10 rounded-lg px-4 py-3">
+              {error}
             </div>
-            <div className="w-full bg-[#2A2D35] rounded-full h-2.5 overflow-hidden">
+          )}
+
+          {/* Progress Bar */}
+          <div className="bg-[#1A2333] rounded-3xl px-7 py-5 mb-8">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-[30px] font-semibold text-white">Progress</h2>
+              <p className="text-4xl font-semibold text-[#FF7B54]">{overview.progress}%</p>
+            </div>
+            <div className="w-full bg-[#2B3344] rounded-full h-3 overflow-hidden">
               <div
-                className="bg-gradient-to-r from-[#FF7B54] to-[#FF9F6F] h-full rounded-full transition-all duration-700 shadow-lg shadow-[#FF7B54]/50"
-                style={{ width: `${(packedCount / totalCount) * 100}%` }}
+                className="bg-[#FF7B54] h-full rounded-full transition-all duration-500"
+                style={{ width: `${overview.progress}%` }}
               />
             </div>
           </div>
 
           {/* Two Column Layout */}
-          <div className="flex gap-8 flex-1">
+          <div className="flex gap-12 flex-1">
             {/* Left Sidebar - Categories */}
-            <div className="w-128 flex-shrink-0 space-y-3">
-              {CATEGORIES.map((cat) => {
-                const { packed, total } = getCategoryCount(cat.name);
-                const itemCount = total === 0 ? '0/0' : `${packed}/${total}`;
+            <div className="w-[360px] flex-shrink-0 space-y-2 pt-8">
+              {overview.categories.map((cat) => {
                 return (
                   <button
+                    type="button"
                     key={cat.name}
-                    onClick={() => setSelectedCategory(cat.name)}
-                    className={`w-sm flex items-center gap-3 px-4 py-4 rounded-xl border transition-all duration-300 text-left ${
+                    onClick={() => handleCategorySelect(cat.name)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    className={`w-full flex items-center gap-4 px-6 py-5 rounded-xl border transition-all duration-200 text-left ${
                       selectedCategory === cat.name
-                        ? 'bg-[#FF7B54]/15 border-[#FF7B54] shadow-lg shadow-[#FF7B54]/20'
-                        : 'bg-transparent border-[#2A2D35] hover:border-[#3A3F4A]'
+                        ? 'bg-[#FF7B54]/15 border-[#FF7B54]'
+                        : 'bg-transparent border-transparent text-[#768199] hover:border-[#253148]'
                     }`}
                   >
-                    <span className="text-2xl">{cat.icon}</span>
+                    <span className={`${selectedCategory === cat.name ? 'text-[#FF7B54]' : 'text-[#6B7488]'}`}>
+                      <CategoryIcon icon={cat.icon} />
+                    </span>
                     <div className="flex-1 min-w-0">
-                      <p className={`font-semibold whitespace-nowrap ${selectedCategory === cat.name ? 'text-[#FF7B54]' : 'text-white'}`}>
+                      <p className={`font-medium ${selectedCategory === cat.name ? 'text-[#FF7B54]' : 'text-[#7D8598]'}`}>
                         {cat.name}
                       </p>
-                      <p className={`text-xs ${selectedCategory === cat.name ? 'text-[#FF7B54]/70' : 'text-[#7A7E8C]'}`}>
-                        {itemCount}
-                      </p>
                     </div>
+                    <p className={`${selectedCategory === cat.name ? 'text-[#FF7B54]' : 'text-[#7D8598]'}`}>
+                      {cat.packed}/{cat.total}
+                    </p>
                   </button>
                 );
               })}
             </div>
 
             {/* Right Content - Items Card */}
-            <div className="flex-1 flex flex-col min-w-0 bg-gradient-to-br from-[#1A1D26] to-[#13151A] border border-[#2A2D35] rounded-2xl p-8 shadow-lg">
+            <div className="flex-1 flex flex-col min-w-0 bg-[#0B1424]/70 border border-[#1D2C42] rounded-xl p-8">
               {/* Category Header */}
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-3xl font-bold text-white">{selectedCategory}</h2>
+              <div className="flex items-center justify-between mb-6 gap-8">
+                <h2 className="text-2xl font-semibold text-[#FF7B54]">{selectedCategory}</h2>
                 <button 
+                  type="button"
                   onClick={() => setShowAddModal(true)}
-                  className="text-[#FF7B54] hover:text-[#FF9F6F] transition-colors text-sm font-semibold">
+                  onMouseDown={(event) => event.preventDefault()}
+                  className="text-[#FF7B54] hover:text-[#FF9F6F] transition-colors text-xl font-medium whitespace-nowrap ml-4">
                   + Add item
                 </button>
               </div>
 
               {/* Items List */}
-              <div className="space-y-3 w-2xl flex-1 overflow-y-auto pr-10">
-                {selectedItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-5 p-5 bg-[#13151A] border border-[#2A2D35] rounded-xl hover:border-[#FF7B54]/50 transition-all duration-300 group hover:shadow-lg hover:shadow-[#FF7B54]/10"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={item.packed}
-                      onChange={() => toggleItem(item.id)}
-                      className="w-6 h-6 rounded-lg accent-[#FF7B54] cursor-pointer flex-shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-base font-medium transition-all duration-200 ${item.packed ? 'text-[#7A7E8C] line-through' : 'text-white'}`}>
-                        {item.item}
+              {loading ? (
+                <div className="space-y-3">
+                  {[...Array(4)].map((_, index) => (
+                    <div key={`loading-${index}`} className="h-8 bg-[#172131] rounded animate-pulse" />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4 pt-6">
+                  {selectedItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        void toggleItem(item.id);
+                      }}
+                      onMouseDown={(event) => event.preventDefault()}
+                      className={`w-full flex items-center gap-4 text-left px-4 py-3 rounded-lg transition-all duration-150 ${
+                        item.packed 
+                          ? 'hover:bg-[#1A2A3A]/40' 
+                          : 'hover:bg-[#0F1B2E]/60'
+                      }`}
+                      aria-label={`Toggle ${item.name}`}
+                    >
+                      <span
+                        className={`w-4 h-4 rounded-full border-2 transition-all duration-150 flex-shrink-0 ${
+                          item.packed
+                            ? 'bg-[#00B96B] border-[#00B96B]'
+                            : 'border-[#7A8499] hover:border-[#9CA5B8]'
+                        }`}
+                      />
+                      <p className={`text-3xl font-semibold ${item.packed ? 'text-[#5D677D] line-through' : 'text-white'}`}>
+                        {item.name}
                       </p>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      {item.priority === 'high' && (
-                        <span className="text-xs px-3 py-1.5 bg-[#FF7B54]/20 text-[#FF7B54] rounded-full font-semibold whitespace-nowrap">
-                          Essential
-                        </span>
-                      )}
-                      {item.priority === 'medium' && (
-                        <span className="text-xs px-3 py-1.5 bg-[#A0A5B8]/20 text-[#A0A5B8] rounded-full font-semibold whitespace-nowrap">
-                          Important
-                        </span>
-                      )}
-                      {item.priority === 'low' && (
-                        <span className="text-xs px-3 py-1.5 bg-[#7A7E8C]/20 text-[#7A7E8C] rounded-full font-semibold whitespace-nowrap">
-                          Optional
-                        </span>
-                      )}
-                      <button className="text-[#A0A5B8] hover:text-[#FF7B54] opacity-0 group-hover:opacity-100 transition-all duration-300 text-lg hover:scale-125">
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Empty State */}
               {selectedItems.length === 0 && (
-                <div className="text-center py-20">
-                  <p className="text-[#A0A5B8]">No items in {selectedCategory} yet.</p>
+                <div className="text-center py-16">
+                  <p className="text-[#7D8598]">No items in {selectedCategory} yet.</p>
                 </div>
               )}
             </div>
@@ -227,139 +377,88 @@ export default function PackingPage() {
       </div>
 
       {/* Add Packing Item Modal */}
-      <>
-        {/* Backdrop */}
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-500"
-          style={{ 
-            opacity: showAddModal ? 1 : 0,
-            pointerEvents: showAddModal ? 'auto' : 'none'
-          }}
-          onClick={() => setShowAddModal(false)}
-        />
-        
-        {/* Modal */}
-        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
-          <div 
-            className="bg-gradient-to-br from-[#1A1D26] to-[#13151A] border border-[#2A2D35] rounded-3xl p-8 max-w-md w-full pointer-events-auto shadow-2xl shadow-black/50 transition-all duration-500 ease-out"
-            style={{ 
-              opacity: showAddModal ? 1 : 0,
-              transform: showAddModal ? 'scale(1) translateY(0)' : 'scale(0.85) translateY(40px)'
-            }}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <p className="text-xs text-[#FF7B54] font-bold tracking-widest uppercase mb-2">Add Item</p>
-                <h2 className="text-2xl font-bold text-white">New Packing Item</h2>
-              </div>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-[#A0A5B8] hover:text-white transition-colors duration-200 p-2 hover:bg-[#2A2D35] rounded-lg ml-4 flex-shrink-0"
-              >
-                ✕
-              </button>
-            </div>
+      {showAddModal && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-500"
+            onClick={() => setShowAddModal(false)}
+          />
 
-            {/* Form */}
-            <form onSubmit={handleAddItem} className="space-y-6">
-              {/* Item Name */}
-              <div>
-                <label className="block text-xs font-bold text-[#FF7B54] uppercase tracking-widest mb-2">
-                  Item Name
-                </label>
-                <input
-                  type="text"
-                  name="item"
-                  value={formData.item}
-                  onChange={handleInputChange}
-                  placeholder="e.g. Swimwear"
-                  className="w-full px-4 py-3 bg-[#13151A] border border-[#2A2D35] rounded-xl text-white placeholder-[#7A7E8C] hover:border-[#2A2D35]/80 focus:border-[#FF7B54] focus:outline-none transition-all duration-300 focus:ring-1 focus:ring-[#FF7B54]/30 focus:shadow-lg focus:shadow-[#FF7B54]/10"
-                  required
-                />
-              </div>
-
-              {/* Category */}
-              <div>
-                <label className="block text-xs font-bold text-[#FF7B54] uppercase tracking-widest mb-2">
-                  Category
-                </label>
-                <select
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-[#13151A] border border-[#2A2D35] rounded-xl text-white hover:border-[#2A2D35]/80 focus:border-[#FF7B54] focus:outline-none transition-all duration-300 focus:ring-1 focus:ring-[#FF7B54]/30 focus:shadow-lg focus:shadow-[#FF7B54]/10 cursor-pointer"
-                >
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat.name} value={cat.name}>
-                      {cat.icon} {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Importance/Priority */}
-              <div>
-                <label className="block text-xs font-bold text-[#FF7B54] uppercase tracking-widest mb-3">
-                  Importance
-                </label>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, priority: 'high' }))}
-                    className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all duration-300 border ${
-                      formData.priority === 'high'
-                        ? 'bg-[#FF7B54]/20 border-[#FF7B54] text-[#FF7B54] shadow-lg shadow-[#FF7B54]/20'
-                        : 'bg-transparent border-[#2A2D35] text-[#A0A5B8] hover:border-[#FF7B54]/50'
-                    }`}
-                  >
-                    Essential
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, priority: 'medium' }))}
-                    className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all duration-300 border ${
-                      formData.priority === 'medium'
-                        ? 'bg-[#A0A5B8]/20 border-[#A0A5B8] text-[#A0A5B8] shadow-lg shadow-[#A0A5B8]/20'
-                        : 'bg-transparent border-[#2A2D35] text-[#A0A5B8] hover:border-[#A0A5B8]/50'
-                    }`}
-                  >
-                    Important
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, priority: 'low' }))}
-                    className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all duration-300 border ${
-                      formData.priority === 'low'
-                        ? 'bg-[#7A7E8C]/20 border-[#7A7E8C] text-[#7A7E8C] shadow-lg shadow-[#7A7E8C]/20'
-                        : 'bg-transparent border-[#2A2D35] text-[#A0A5B8] hover:border-[#7A7E8C]/50'
-                    }`}
-                  >
-                    Optional
-                  </button>
-                </div>
-              </div>
-
-              {/* Buttons */}
-              <div className="flex gap-3 pt-6">
-                <button
-                  type="submit"
-                  className="flex-1 px-6 py-3.5 bg-gradient-to-r from-[#FF7B54] to-[#FF9F6F] hover:from-[#FF9F6F] hover:to-[#FFA880] text-white font-bold rounded-full transition-all duration-300 hover:shadow-lg hover:shadow-[#FF7B54]/50 hover:scale-105 active:scale-95"
-                >
-                  Add Item
-                </button>
+          {/* Modal */}
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#121A29] border border-[#2A2F3D] rounded-2xl p-8 max-w-xl w-full shadow-2xl shadow-black/50 transition-all duration-500 ease-out">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-4xl font-semibold text-white">Add Packing Item</h2>
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 px-6 py-3.5 bg-[#2A2D35] hover:bg-[#3A3F4A] text-white font-semibold rounded-full transition-all duration-300 hover:shadow-lg hover:shadow-black/30 hover:scale-105 active:scale-95 border border-[#3A3F4A]"
+                  onClick={() => {
+                    setModalValidationError(null);
+                    setShowAddModal(false);
+                  }}
+                  className="text-[#64708A] hover:text-white transition-colors duration-200 p-1"
                 >
-                  Cancel
+                  ✕
                 </button>
               </div>
-            </form>
+
+              {/* Form */}
+              <form onSubmit={handleAddItem} className="space-y-6" autoComplete="off" noValidate>
+                {/* Item Name */}
+                <div>
+                  <label className="block text-2xl font-semibold text-white mb-3">
+                    Item Name
+                  </label>
+                  <input
+                    type="text"
+                    name="item"
+                    value={formData.item}
+                    onChange={handleInputChange}
+                    placeholder="e.g. Swimwear"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className="w-full px-4 py-3 bg-[#13151A] border border-[#FF7B54] rounded-xl text-white placeholder-[#7A7E8C] focus:outline-none"
+                  />
+                  {modalValidationError && (
+                    <p className="mt-2 text-sm text-[#FFB49F]">{modalValidationError}</p>
+                  )}
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className="block text-2xl font-semibold text-white mb-3">
+                    Category
+                  </label>
+                  <select
+                    name="category"
+                    value={formData.category}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-[#222C3D] border border-[#222C3D] rounded-xl text-white focus:outline-none cursor-pointer"
+                  >
+                    {overview.categories.map((cat) => (
+                      <option key={cat.name} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Buttons */}
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    className="w-full px-6 py-3.5 bg-[#FF7B54] hover:bg-[#FF9F6F] text-white font-semibold rounded-xl transition-colors duration-150"
+                  >
+                    Add Items
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      </>
+        </>
+      )}
     </main>
   );
 }

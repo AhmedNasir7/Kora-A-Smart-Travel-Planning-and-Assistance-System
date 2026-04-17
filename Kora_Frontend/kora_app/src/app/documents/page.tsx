@@ -1,66 +1,235 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Header } from '@/components/Header';
 import { DashboardFooter } from '@/components/dashboard';
+import {
+  apiService,
+  DocumentItem,
+  DocumentListResponse,
+  DocumentStatus,
+} from '@/lib/api';
+import { resolvePreferredTrip, sanitizeTripId } from '@/lib/trip-context';
 
-interface Document {
+const CATEGORY_TABS = [
+  'All',
+  'ID',
+  'Ticket',
+  'Booking',
+  'Insurance',
+  'Visa',
+  'Health',
+] as const;
+
+type DocumentCategory = (typeof CATEGORY_TABS)[number];
+
+type TripContext = {
   id: string;
-  name: string;
-  category: string;
-  status: 'verified' | 'pending' | 'expired';
-  expiryDate: string;
-  uploadDate: string;
+  destination: string;
+  country: string;
+  startDate: string;
+  endDate: string;
+};
+
+const DEMO_FALLBACK_DOCUMENTS: DocumentItem[] = [
+  {
+    id: '1',
+    name: 'Passport',
+    category: 'ID',
+    status: 'verified',
+    expiryDate: '2028-04-15',
+    uploadDate: '2024-01-15',
+    tripId: null,
+  },
+  {
+    id: '2',
+    name: 'Flight Ticket - TK 432',
+    category: 'Ticket',
+    status: 'verified',
+    expiryDate: '',
+    uploadDate: '2024-01-20',
+    tripId: null,
+  },
+  {
+    id: '3',
+    name: 'Hotel Reservation - Shinjuku',
+    category: 'Booking',
+    status: 'verified',
+    expiryDate: '',
+    uploadDate: '2024-01-21',
+    tripId: null,
+  },
+  {
+    id: '4',
+    name: 'Travel Insurance',
+    category: 'Insurance',
+    status: 'pending',
+    expiryDate: '',
+    uploadDate: '2024-02-05',
+    tripId: null,
+  },
+  {
+    id: '5',
+    name: 'Visa Application',
+    category: 'Visa',
+    status: 'pending',
+    expiryDate: '',
+    uploadDate: '2024-02-06',
+    tripId: null,
+  },
+  {
+    id: '6',
+    name: "Driver's License",
+    category: 'ID',
+    status: 'expired',
+    expiryDate: '2026-11-01',
+    uploadDate: '2024-02-07',
+    tripId: null,
+  },
+  {
+    id: '7',
+    name: 'Train Pass - JR Rail',
+    category: 'Ticket',
+    status: 'verified',
+    expiryDate: '',
+    uploadDate: '2024-02-08',
+    tripId: null,
+  },
+  {
+    id: '8',
+    name: 'Vaccination Record',
+    category: 'Health',
+    status: 'verified',
+    expiryDate: '',
+    uploadDate: '2024-02-09',
+    tripId: null,
+  },
+];
+
+function normalizeCategory(raw: string): DocumentCategory {
+  const value = raw.trim().toLowerCase();
+  if (value === 'id' || value === 'identity') return 'ID';
+  if (value.includes('ticket') || value.includes('flight') || value.includes('train')) return 'Ticket';
+  if (value.includes('booking') || value.includes('hotel') || value.includes('reservation') || value.includes('accommodation')) return 'Booking';
+  if (value.includes('insurance')) return 'Insurance';
+  if (value.includes('visa')) return 'Visa';
+  if (value.includes('health') || value.includes('vaccine') || value.includes('medical')) return 'Health';
+  return 'Booking';
+}
+
+function toDisplayStatus(status: DocumentStatus): 'secured' | 'missing' {
+  return status === 'verified' ? 'secured' : 'missing';
 }
 
 export default function DocumentsPage() {
-  const [documents, setDocuments] = useState<Document[]>([
-    { id: '1', name: 'Passport', category: 'Identity', status: 'verified', expiryDate: '2027-05-20', uploadDate: '2024-01-15' },
-    { id: '2', name: 'Travel Visa', category: 'Visa', status: 'verified', expiryDate: '2026-12-31', uploadDate: '2024-01-15' },
-    { id: '3', name: 'Travel Insurance', category: 'Insurance', status: 'pending', expiryDate: '2026-06-15', uploadDate: '2024-02-10' },
-    { id: '4', name: 'Flight Booking', category: 'Travel', status: 'verified', expiryDate: '2026-03-20', uploadDate: '2024-01-20' },
-    { id: '5', name: 'Hotel Confirmation', category: 'Accommodation', status: 'pending', expiryDate: '', uploadDate: '2024-02-05' },
-  ]);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [activeTrip, setActiveTrip] = useState<TripContext | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<DocumentCategory>('All');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [tripIdParam, setTripIdParam] = useState<string | null>(null);
+  const [queryReady, setQueryReady] = useState(false);
 
-  const [filter, setFilter] = useState<'all' | 'verified' | 'pending' | 'expired'>('all');
+  useEffect(() => {
+    setTripIdParam(sanitizeTripId(new URLSearchParams(window.location.search).get('tripId')));
+    setQueryReady(true);
+  }, []);
 
-  const filteredDocuments = documents.filter((doc) => {
-    if (filter === 'all') return true;
-    return doc.status === filter;
-  });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'verified':
-        return 'bg-[#10B981]/15 text-[#10B981] border-[#10B981]/30';
-      case 'pending':
-        return 'bg-[#FF7B54]/15 text-[#FF7B54] border-[#FF7B54]/30';
-      case 'expired':
-        return 'bg-[#EF4444]/15 text-[#EF4444] border-[#EF4444]/30';
-      default:
-        return '';
+  useEffect(() => {
+    if (!queryReady) {
+      return;
     }
-  };
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'verified':
-        return 'Verified';
-      case 'pending':
-        return 'Pending Review';
-      case 'expired':
-        return 'Expired';
-      default:
-        return status;
+    let mounted = true;
+
+    const loadDocuments = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const resolvedTrip = tripIdParam
+          ? await apiService.getTrip(tripIdParam)
+          : await resolvePreferredTrip();
+
+        if (!resolvedTrip) {
+          if (!mounted) {
+            return;
+          }
+
+          setActiveTrip(null);
+          setDocuments(DEMO_FALLBACK_DOCUMENTS);
+          setError('No trips are available yet');
+          return;
+        }
+
+        const response: DocumentListResponse = await apiService.getDocuments('all', resolvedTrip.id);
+        if (!mounted) return;
+
+        setActiveTrip({
+          id: resolvedTrip.id,
+          destination: resolvedTrip.destination,
+          country: resolvedTrip.country,
+          startDate: resolvedTrip.startDate,
+          endDate: resolvedTrip.endDate,
+        });
+        setDocuments(response.items);
+      } catch (err) {
+        if (!mounted) return;
+        setError(err instanceof Error ? err.message : 'Failed to load documents');
+        setDocuments(tripIdParam ? [] : DEMO_FALLBACK_DOCUMENTS);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadDocuments();
+
+    return () => {
+      mounted = false;
+    };
+  }, [queryReady, tripIdParam]);
+
+  const filteredDocuments = useMemo(() => {
+    if (categoryFilter === 'All') {
+      return documents;
     }
+
+    return documents.filter(
+      (doc) => normalizeCategory(doc.category) === categoryFilter,
+    );
+  }, [documents, categoryFilter]);
+
+  const uploadedCount = useMemo(
+    () => documents.filter((doc) => toDisplayStatus(doc.status) === 'secured').length,
+    [documents],
+  );
+
+  const tripTitle = activeTrip ? `${activeTrip.destination} Documents` : 'Documents';
+  const tripSubtitle = activeTrip
+    ? `${activeTrip.country} • ${activeTrip.startDate} - ${activeTrip.endDate}`
+    : 'Your travel documents.';
+
+  const formatDate = (value: string): string => {
+    if (!value) {
+      return '';
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return '';
+    }
+
+    return parsed.toISOString().slice(0, 10);
   };
 
   return (
-    <main className="min-h-screen bg-[#13151A]">
+    <main className="min-h-screen bg-[#040B18]">
       {/* Background Gradients */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-[rgba(255,123,84,0.08)] blur-3xl" />
-        <div className="absolute bottom-32 left-20 w-80 h-80 rounded-full bg-[rgba(255,123,84,0.05)] blur-3xl" />
+        <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-[rgba(255,123,84,0.06)] blur-3xl" />
+        <div className="absolute bottom-32 left-20 w-80 h-80 rounded-full bg-[rgba(255,123,84,0.03)] blur-3xl" />
       </div>
 
       {/* Content */}
@@ -69,94 +238,125 @@ export default function DocumentsPage() {
 
         <div className="max-w-6xl mx-auto px-6 py-12 mt-20">
           {/* Header Section */}
-          <div className="flex items-start justify-between mb-12">
+          <div className="flex items-start justify-between mb-10">
             <div>
-              <p className="text-xs text-[#FF7B54] font-bold tracking-widest uppercase mb-3">Documents</p>
-              <h1 className="text-5xl font-bold text-white mb-4">Travel Documents</h1>
-              <p className="text-[#A0A5B8]">{documents.length} documents uploaded</p>
+              <p className="text-xs text-[#FF7B54] tracking-wide mb-2">Document Vault</p>
+              <h1 className="text-5xl font-bold text-white mb-3">{tripTitle}</h1>
+              <p className="text-[#8A92A4] mb-2">{tripSubtitle}</p>
+              <p className="text-[#8A92A4]">{uploadedCount}/{Math.max(documents.length, 1)} documents uploaded</p>
             </div>
-            <button className="px-8 py-3 bg-[#FF7B54] hover:bg-[#FF9F6F] text-white font-semibold rounded-full transition-all duration-200 hover:shadow-lg hover:shadow-[#FF7B54]/50 flex items-center gap-2">
-              <span className="text-xl">+</span> Upload Document
+            <button className="px-6 py-3 bg-[#FF7B54] hover:bg-[#FF9F6F] text-[#0F141F] text-sm font-semibold rounded-xl transition-all duration-200 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16V8m0 0l-3 3m3-3l3 3M5 16v1a2 2 0 002 2h10a2 2 0 002-2v-1" />
+              </svg>
+              Upload Document
             </button>
           </div>
 
+          {error && (
+            <div className="mb-6 text-sm text-[#FFB49F] border border-[#FF7B54]/30 bg-[#FF7B54]/10 rounded-lg px-4 py-3">
+              {error}. Showing fallback documents.
+            </div>
+          )}
+
           {/* Filter Tabs */}
-          <div className="flex items-center gap-6 border-b border-[#2A2D35] mb-8 pb-0">
-            {(['all', 'verified', 'pending', 'expired'] as const).map((tab) => (
+          <div className="flex items-center gap-3 mb-8 flex-wrap">
+            {CATEGORY_TABS.map((tab) => (
               <button
                 key={tab}
-                onClick={() => setFilter(tab)}
-                className={`px-1 py-3 text-sm font-medium transition-all duration-300 relative ${
-                  filter === tab ? 'text-[#FF7B54]' : 'text-[#A0A5B8] hover:text-white'
+                onClick={() => setCategoryFilter(tab)}
+                className={`px-3 py-1.5 rounded-lg text-xs transition-all duration-200 border ${
+                  categoryFilter === tab
+                    ? 'text-[#FF7B54] border-[#FF7B54]/30 bg-[#FF7B54]/10'
+                    : 'text-[#7D8598] border-transparent hover:text-white'
                 }`}
               >
-                {tab === 'all' && 'All'}
-                {tab === 'verified' && 'Verified'}
-                {tab === 'pending' && 'Pending'}
-                {tab === 'expired' && 'Expired'}
-                {filter === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#FF7B54] to-[#FF9F6F]" />}
+                {tab}
               </button>
             ))}
           </div>
 
           {/* Documents Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, index) => (
+                <div
+                  key={`skeleton-${index}`}
+                  className="h-48 rounded-xl border border-[#1A2436] bg-[#0B1424]/60 animate-pulse"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {filteredDocuments.map((doc) => (
               <div
                 key={doc.id}
-                className="bg-gradient-to-br from-[#1A1D26] to-[#13151A] border border-[#2A2D35] rounded-2xl p-6 hover:border-[#FF7B54]/30 transition-all duration-300 hover:shadow-lg hover:shadow-[#FF7B54]/10 group"
+                className="bg-[#0B1424]/70 border border-[#162033] rounded-xl p-4 hover:border-[#FF7B54]/20 transition-all duration-300 group"
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#FF7B54]/15 rounded-lg flex items-center justify-center group-hover:bg-[#FF7B54]/25 transition-colors duration-200">
-                      <svg className="w-5 h-5 text-[#FF7B54]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#1A2436] flex items-center justify-center text-[#6D778C]">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 3h7l5 5v13a1 1 0 01-1 1H7a2 2 0 01-2-2V5a2 2 0 012-2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 3v5h5" />
+                    </svg>
+                  </div>
+                  <span
+                    className={`text-[10px] font-medium ${
+                      toDisplayStatus(doc.status) === 'secured'
+                        ? 'text-[#16C784]'
+                        : 'text-[#EAB308]'
+                    }`}
+                  >
+                    {toDisplayStatus(doc.status) === 'secured' ? 'Secured' : 'Missing'}
+                  </span>
+                </div>
+
+                <div className="space-y-1 mb-4">
+                  <h3 className="text-sm font-semibold text-white leading-snug">{doc.name}</h3>
+                  <p className="text-xs text-[#7D8598]">{normalizeCategory(doc.category)}</p>
+                  <p className="text-xs text-[#5B657A]">{activeTrip ? activeTrip.destination : doc.tripId ? 'Trip linked' : 'All Trips'}</p>
+                  {doc.expiryDate ? (
+                    <p className="text-xs text-[#7D8598]">Expires: {formatDate(doc.expiryDate)}</p>
+                  ) : null}
+                </div>
+
+                <div className="pt-3 border-t border-[#162033] text-xs">
+                  {toDisplayStatus(doc.status) === 'secured' ? (
+                    <button className="text-[#7D8598] hover:text-white transition-colors duration-150 inline-flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12z" />
                       </svg>
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-white">{doc.name}</h3>
-                      <p className="text-xs text-[#7A7E8C]">{doc.category}</p>
-                    </div>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(doc.status)}`}>
-                    {getStatusLabel(doc.status)}
-                  </div>
-                </div>
-
-                <div className="space-y-3 my-6 pt-4 border-t border-[#2A2D35]">
-                  <div className="flex items-center justify-between text-xs">
-                    <p className="text-[#7A7E8C]">Uploaded</p>
-                    <p className="text-[#A0A5B8]">{new Date(doc.uploadDate).toLocaleDateString()}</p>
-                  </div>
-                  {doc.expiryDate && (
-                    <div className="flex items-center justify-between text-xs">
-                      <p className="text-[#7A7E8C]">Expires</p>
-                      <p className="text-[#A0A5B8]">{new Date(doc.expiryDate).toLocaleDateString()}</p>
-                    </div>
+                      View
+                    </button>
+                  ) : (
+                    <button className="text-[#FF7B54] hover:text-[#FF9F6F] transition-colors duration-150 inline-flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16V8m0 0l-3 3m3-3l3 3M5 16v1a2 2 0 002 2h10a2 2 0 002-2v-1" />
+                      </svg>
+                      Upload
+                    </button>
                   )}
-                </div>
-
-                <div className="flex items-center gap-2 pt-2 border-t border-[#2A2D35]">
-                  <button className="flex-1 px-3 py-2 text-xs font-medium text-[#A0A5B8] hover:text-white hover:bg-[#2A2D35] rounded-lg transition-all duration-200">
-                    View
-                  </button>
-                  <button className="flex-1 px-3 py-2 text-xs font-medium text-[#A0A5B8] hover:text-white hover:bg-[#2A2D35] rounded-lg transition-all duration-200">
-                    Download
-                  </button>
-                  <button className="px-3 py-2 text-xs font-medium text-[#A0A5B8] hover:text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-all duration-200">
-                    ✕
-                  </button>
                 </div>
               </div>
             ))}
-          </div>
+
+            <button
+              type="button"
+              className="h-full min-h-[192px] rounded-xl border border-dashed border-[#233149] bg-transparent hover:border-[#FF7B54]/35 transition-colors duration-200 flex flex-col items-center justify-center text-[#667089] hover:text-[#9AA6BE]"
+            >
+              <span className="text-2xl leading-none mb-2">+</span>
+              <span className="text-sm">Add document</span>
+            </button>
+            </div>
+          )}
 
           {/* Empty State */}
           {filteredDocuments.length === 0 && (
-            <div className="text-center py-20">
-              <p className="text-[#A0A5B8] mb-4">No documents found in this category</p>
-              <button className="text-[#FF7B54] hover:text-[#FF9F6F] font-semibold">
-                Upload your first document →
+            <div className="text-center py-16">
+              <p className="text-[#8A92A4] mb-4">No documents found in this category</p>
+              <button className="text-[#FF7B54] hover:text-[#FF9F6F] font-semibold text-sm">
+                Upload your first document
               </button>
             </div>
           )}

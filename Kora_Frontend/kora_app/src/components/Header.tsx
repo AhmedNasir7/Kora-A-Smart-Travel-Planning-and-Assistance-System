@@ -17,7 +17,6 @@ export function Header({ variant = 'landing' }: HeaderProps) {
 
   const handleSignOut = async () => {
     await signOut();
-    router.push('/');
   };
 
   const handleDashboardClick = () => {

@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { Header } from '@/components/Header';
 import { TripsTab } from '@/components/dashboard/TripsTab';
 import { TripCard } from '@/components/dashboard/TripCard';
 import { AddTripModal } from '@/components/dashboard/AddTripModal';
 import { DashboardFooter } from '@/components/dashboard';
+import { apiService, type TripCardItem, type TripStatus } from '@/lib/api';
 
-const trips = [
+const fallbackTrips: TripCardItem[] = [
   {
     id: '1',
     destination: 'Tokyo',
@@ -65,16 +66,135 @@ const tabs = ['all', 'upcoming', 'planning', 'draft', 'idea'];
 export default function TripsPage() {
   const [activeTab, setActiveTab] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [trips, setTrips] = useState<TripCardItem[]>(fallbackTrips);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [mutatingTripId, setMutatingTripId] = useState<string | null>(null);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
-  const filteredTrips =
-    activeTab === 'all'
-      ? trips
-      : trips.filter((trip) => trip.status.toLowerCase() === activeTab);
+  useEffect(() => {
+    let mounted = true;
 
-  const handleAddTrip = (data: any) => {
-    console.log('New trip:', data);
-    setIsModalOpen(false);
-    // TODO: Add API call to save trip
+    const loadTrips = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await apiService.getTrips();
+        if (mounted) {
+          setTrips(response.items);
+        }
+      } catch (loadError) {
+        if (mounted) {
+          setError(loadError instanceof Error ? loadError.message : 'Failed to load trips');
+          setTrips(activeTab === 'all' && !deferredSearchQuery ? fallbackTrips : []);
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadTrips();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredTrips = useMemo(() => {
+    const normalizedTab = activeTab.toLowerCase();
+    const normalizedSearch = deferredSearchQuery.trim().toLowerCase();
+
+    return trips.filter((trip) => {
+      const matchesTab = normalizedTab === 'all' || trip.status.toLowerCase() === normalizedTab;
+      const matchesSearch = !normalizedSearch
+        ? true
+        : `${trip.destination} ${trip.country} ${trip.status}`
+            .toLowerCase()
+            .includes(normalizedSearch);
+
+      return matchesTab && matchesSearch;
+    });
+  }, [activeTab, deferredSearchQuery, trips]);
+
+  const handleAddTrip = async (data: {
+    destination: string;
+    startDate: string;
+    endDate: string;
+    status: string;
+    emoji: string;
+  }) => {
+    try {
+      const selectedStatus = data.status as TripStatus;
+      const createdTrip = await apiService.createTrip({
+        destination: data.destination,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        status: selectedStatus,
+        emoji: data.emoji,
+      });
+
+      const optimisticTrip: TripCardItem = {
+        ...createdTrip,
+        status: selectedStatus,
+        destination: data.destination,
+        startDate: createdTrip.startDate,
+        endDate: createdTrip.endDate,
+        emoji: createdTrip.emoji ?? data.emoji,
+      };
+
+      setTrips((currentTrips) => [optimisticTrip, ...currentTrips.filter((trip) => trip.id !== createdTrip.id)]);
+      setIsModalOpen(false);
+      setActiveTab('all');
+      setSearchQuery('');
+    } catch (createError) {
+      console.error('Failed to create trip:', createError);
+    }
+  };
+
+  const handleQuickStatusChange = async (
+    id: string,
+    status: 'Planning' | 'Upcoming',
+  ) => {
+    try {
+      setMutatingTripId(id);
+      const updated = await apiService.updateTripStatus(id, { status });
+      setTrips((currentTrips) =>
+        currentTrips.map((trip) =>
+          trip.id === id ? { ...trip, status: updated.status } : trip,
+        ),
+      );
+    } catch (mutationError) {
+      setError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : 'Failed to update trip status',
+      );
+    } finally {
+      setMutatingTripId(null);
+    }
+  };
+
+  const handleQuickDelete = async (id: string) => {
+    const shouldDelete = window.confirm('Delete this trip?');
+    if (!shouldDelete) {
+      return;
+    }
+
+    try {
+      setMutatingTripId(id);
+      await apiService.deleteTrip(id);
+      setTrips((currentTrips) => currentTrips.filter((trip) => trip.id !== id));
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error ? deleteError.message : 'Failed to delete trip',
+      );
+    } finally {
+      setMutatingTripId(null);
+    }
   };
 
   return (
@@ -95,7 +215,9 @@ export default function TripsPage() {
             <div>
               <p className="text-sm text-[#FF7B54] font-semibold mb-2">Trips</p>
               <h1 className="text-4xl font-bold text-white mb-2">Your Journeys</h1>
-              <p className="text-[#A0A5B8]">{trips.length} trips planned</p>
+              <p className="text-[#A0A5B8]">{filteredTrips.length} trips planned</p>
+              {isLoading && <p className="text-xs text-[#7A7E8C] mt-2">Syncing trips...</p>}
+              {error && <p className="text-xs text-[#FF9F6F] mt-2">{error}. Showing local snapshot.</p>}
             </div>
             <button
               onClick={() => setIsModalOpen(true)}
@@ -106,12 +228,24 @@ export default function TripsPage() {
           </div>
 
           {/* Tabs */}
-          <TripsTab tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
+          <TripsTab
+            tabs={tabs}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
 
           {/* Trips Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredTrips.map((trip) => (
-              <TripCard key={trip.id} {...trip} />
+              <TripCard
+                key={trip.id}
+                {...trip}
+                onStatusChange={handleQuickStatusChange}
+                onDelete={handleQuickDelete}
+                isMutating={mutatingTripId === trip.id}
+              />
             ))}
           </div>
 

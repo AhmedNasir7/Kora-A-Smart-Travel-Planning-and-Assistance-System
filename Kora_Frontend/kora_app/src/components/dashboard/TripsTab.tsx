@@ -2,18 +2,27 @@ interface TripsTabProps {
   tabs: string[];
   activeTab: string;
   onTabChange: (tab: string) => void;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
 }
 
-export function TripsTab({ tabs, activeTab, onTabChange }: TripsTabProps) {
+export function TripsTab({
+  tabs,
+  activeTab,
+  onTabChange,
+  searchValue = '',
+  onSearchChange,
+}: TripsTabProps) {
   return (
-    <div className="flex items-center justify-between gap-6 mb-8 pb-0">
+    <div className="relative z-20 flex items-center justify-between gap-6 mb-8 pb-0 pointer-events-auto">
       {/* Tabs */}
       <div className="flex gap-6 overflow-x-auto flex-1">
         {tabs.map((tab) => (
           <button
             key={tab}
+            type="button"
             onClick={() => onTabChange(tab)}
-            className={`px-1 py-3 text-sm font-medium transition-all duration-300 whitespace-nowrap relative ${
+            className={`px-1 py-3 text-sm font-medium transition-all duration-300 whitespace-nowrap relative z-10 ${
               activeTab === tab
                 ? 'text-[#FF7B54]'
                 : 'text-[#A0A5B8] hover:text-white'
@@ -45,6 +54,8 @@ export function TripsTab({ tabs, activeTab, onTabChange }: TripsTabProps) {
         <input
           type="text"
           placeholder="Search trips..."
+          value={searchValue}
+          onChange={(event) => onSearchChange?.(event.target.value)}
           className="pl-10 pr-4 py-2.5 bg-[#1A1D26] border border-[#2A2D35] rounded-xl text-sm text-[#A0A5B8] placeholder-[#7A7E8C] focus:border-[#FF7B54] focus:ring-1 focus:ring-[#FF7B54]/30 focus:outline-none transition-all duration-200 w-48 hover:border-[#2A2D35]/80"
         />
       </div>

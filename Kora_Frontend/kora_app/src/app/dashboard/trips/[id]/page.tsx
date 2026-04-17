@@ -1,27 +1,106 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { DashboardFooter } from '@/components/dashboard';
+import { apiService, type TripDetail, type TripStatus } from '@/lib/api';
 
 export default function TripDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  const [trip, setTrip] = useState<TripDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isMutating, setIsMutating] = useState(false);
 
-  // Sample trip data - in a real app, this would come from an API
-  const trip = {
-    id: params.id,
-    destination: 'Tokyo',
-    country: 'Japan',
-    status: 'Upcoming',
-    startDate: 'MARCH 15',
-    endDate: 'MARCH 22',
-    progress: 75,
-    description: 'An amazing trip to explore the vibrant culture and technology of Tokyo.',
-  };
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTrip = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await apiService.getTrip(params.id);
+        if (mounted) {
+          setTrip(response);
+        }
+      } catch (loadError) {
+        if (mounted) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Failed to load trip details',
+          );
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadTrip();
+
+    return () => {
+      mounted = false;
+    };
+  }, [params.id]);
 
   const handleBack = () => {
     router.back();
+  };
+
+  const handleStatusChange = async (status: TripStatus) => {
+    if (!trip || isMutating) {
+      return;
+    }
+
+    try {
+      setIsMutating(true);
+      const updated = await apiService.updateTripStatus(params.id, { status });
+      setTrip((current) =>
+        current
+          ? {
+              ...current,
+              status: updated.status,
+            }
+          : current,
+      );
+    } catch (mutationError) {
+      setError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : 'Failed to update trip status',
+      );
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
+  const handleDeleteTrip = async () => {
+    if (isMutating) {
+      return;
+    }
+
+    const shouldDelete = window.confirm('Delete this trip permanently?');
+    if (!shouldDelete) {
+      return;
+    }
+
+    try {
+      setIsMutating(true);
+      await apiService.deleteTrip(params.id);
+      router.replace('/dashboard/trips');
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : 'Failed to delete trip',
+      );
+      setIsMutating(false);
+    }
   };
 
   return (
@@ -50,14 +129,22 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h1 className="text-4xl font-bold text-white mb-2">
-                  {trip.destination}
+                  {trip?.destination || 'Trip Details'}
                 </h1>
-                <p className="text-lg text-[#A0A5B8]">{trip.country}</p>
+                <p className="text-lg text-[#A0A5B8]">{trip?.country || 'Loading trip...'}</p>
               </div>
               <span className="px-4 py-2 bg-[#FF7B54] text-white text-sm font-semibold rounded-lg">
-                {trip.status}
+                {trip?.status || 'Loading'}
               </span>
             </div>
+            {isLoading && (
+              <p className="text-xs text-[#7A7E8C]">Syncing trip details...</p>
+            )}
+            {error && (
+              <p className="text-xs text-[#FF9F6F] mt-2">
+                {error}. Showing local snapshot.
+              </p>
+            )}
           </div>
 
           {/* Trip Details */}
@@ -70,26 +157,26 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
                 <div>
                   <p className="text-sm text-[#A0A5B8] mb-1">Duration</p>
                   <p className="text-white">
-                    {trip.startDate} - {trip.endDate}
+                    {trip?.startDate || '—'} - {trip?.endDate || '—'}
                   </p>
                 </div>
 
                 <div>
                   <p className="text-sm text-[#A0A5B8] mb-1">Description</p>
-                  <p className="text-white">{trip.description}</p>
+                  <p className="text-white">{trip?.description || 'Loading trip details...'}</p>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm text-[#A0A5B8]">Preparation Progress</p>
                     <p className="text-sm font-semibold text-[#FF7B54]">
-                      {trip.progress}%
+                      {trip?.progress ?? 0}%
                     </p>
                   </div>
                   <div className="w-full bg-[#2A2D35] rounded-full h-2 overflow-hidden">
                     <div
                       className="bg-gradient-to-r from-[#FF7B54] to-[#FF9F6F] h-full rounded-full"
-                      style={{ width: `${trip.progress}%` }}
+                      style={{ width: `${trip?.progress ?? 0}%` }}
                     />
                   </div>
                 </div>
@@ -102,25 +189,43 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
 
               <div className="space-y-3">
                 <Link
-                  href={`/dashboard/trips/${trip.id}/packing`}
+                  href={`/packing?tripId=${params.id}`}
                   className="block w-full px-4 py-3 bg-[#2A2D35] hover:bg-[#3A3F4A] text-white text-center rounded-lg transition-colors"
                 >
                   Packing List
                 </Link>
                 <Link
-                  href={`/dashboard/trips/${trip.id}/documents`}
+                  href={`/documents?tripId=${params.id}`}
                   className="block w-full px-4 py-3 bg-[#2A2D35] hover:bg-[#3A3F4A] text-white text-center rounded-lg transition-colors"
                 >
                   Documents
                 </Link>
                 <Link
-                  href={`/dashboard/trips/${trip.id}/itinerary`}
+                  href={`/dashboard/trips/${params.id}/itinerary`}
                   className="block w-full px-4 py-3 bg-[#2A2D35] hover:bg-[#3A3F4A] text-white text-center rounded-lg transition-colors"
                 >
                   Itinerary
                 </Link>
-                <button className="w-full px-4 py-3 bg-[#FF7B54] hover:bg-[#FF9F6F] text-white font-semibold rounded-lg transition-colors">
-                  Edit Trip
+                <button
+                  onClick={() => handleStatusChange('Planning')}
+                  disabled={isMutating}
+                  className="w-full px-4 py-3 bg-[#2A2D35] hover:bg-[#3A3F4A] disabled:opacity-60 text-white font-semibold rounded-lg transition-colors"
+                >
+                  Move to Planning
+                </button>
+                <button
+                  onClick={() => handleStatusChange('Upcoming')}
+                  disabled={isMutating}
+                  className="w-full px-4 py-3 bg-[#FF7B54] hover:bg-[#FF9F6F] disabled:opacity-60 text-white font-semibold rounded-lg transition-colors"
+                >
+                  Mark as Upcoming
+                </button>
+                <button
+                  onClick={handleDeleteTrip}
+                  disabled={isMutating}
+                  className="w-full px-4 py-3 bg-[#3A1F24] hover:bg-[#4A2A31] disabled:opacity-60 text-[#FF9F6F] font-semibold rounded-lg transition-colors"
+                >
+                  Delete Trip
                 </button>
               </div>
             </div>

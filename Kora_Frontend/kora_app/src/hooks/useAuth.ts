@@ -214,9 +214,16 @@ export function useAuth() {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    clearAuth();
-    router.push('/');
+    try {
+      await supabase.auth.signOut({ scope: 'global' });
+    } finally {
+      clearAuth();
+      router.replace('/');
+      router.refresh();
+      if (typeof window !== 'undefined') {
+        window.location.assign('/');
+      }
+    }
   };
 
   return { signUp, signIn, signInWithGoogle, signOut, isLoading, error };
