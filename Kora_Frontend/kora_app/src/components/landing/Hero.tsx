@@ -33,8 +33,11 @@ export function Hero() {
             </div>
 
             {/* CTA Button */}
-            <Link href="/signup" className="inline-block px-8 py-3.5 bg-[#FF7B54] hover:bg-[#FF9F6F] text-white font-semibold rounded-full transition-all duration-200 shadow-lg shadow-[#FF7B54]/40 hover:shadow-xl hover:shadow-[#FF7B54]/60">
-              Start Planning →
+            <Link href="/signup" className="inline-flex items-center gap-2 px-8 py-3.5 bg-[#FF7B54] hover:bg-[#FF9F6F] text-white font-semibold rounded-full transition-all duration-200 shadow-lg shadow-[#FF7B54]/40 hover:shadow-xl hover:shadow-[#FF7B54]/60 group">
+              Start Planning
+              <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              </svg>
             </Link>
           </div>
 

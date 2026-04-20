@@ -43,10 +43,4 @@ export const authConfig = {
       description: 'Passports, visas — safely stored',
     },
   ],
-  stats: [
-    { value: '50k+', label: 'Travelers' },
-    { value: '200k', label: 'Trips planned' },
-    { value: '4.6★', label: 'App rating' },
-    { value: '98%', label: 'Satisfied' },
-  ],
 };

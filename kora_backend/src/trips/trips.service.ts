@@ -28,6 +28,7 @@ export class TripsService implements OnModuleInit {
   private readonly supabase: SupabaseClient | null;
   private readonly configErrorMessage: string | null;
   private readonly defaultUserId: string | null;
+  private readonly hasServiceRoleKey: boolean;
   private ownerUserId: string | null = null;
   private ownerUserIdPromise: Promise<string | null> | null = null;
   private readonly fallbackTrips: TripRecord[] = [
@@ -150,6 +151,7 @@ export class TripsService implements OnModuleInit {
       this.configService.get<string>('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY') ||
       '';
 
+    this.hasServiceRoleKey = !!serviceRoleKey && !serviceRoleKey.includes('your-service-role-key') && !serviceRoleKey.includes('replace-with-your-service-role-key');
     const supabaseKey = serviceRoleKey || anonKey;
     const hasPlaceholderUrl =
       supabaseUrl.includes('your-project.supabase.co') ||
@@ -192,7 +194,44 @@ export class TripsService implements OnModuleInit {
     requestUserId?: string,
   ): Promise<TripApiResponse> {
     const ownerUserId = await this.resolveRequestOwnerUserId(requestUserId);
-    this.assertUserScope(ownerUserId);
+    
+    // Return fallback trips if no user context (e.g., unauthenticated landing page requests)
+    if (!ownerUserId) {
+      const normalizedStatus = status?.trim().toLowerCase();
+      const normalizedSearch = search?.trim().toLowerCase();
+
+      const filteredRows = this.fallbackTrips.filter((row) => {
+        const displayStatus = row.status?.toLowerCase() || '';
+        const matchesStatus =
+          !normalizedStatus || normalizedStatus === 'all'
+            ? true
+            : displayStatus === normalizedStatus;
+
+        const matchesSearch = !normalizedSearch
+          ? true
+          : `${row.destination} ${row.country || ''}`
+              .toLowerCase()
+              .includes(normalizedSearch);
+
+        return matchesStatus && matchesSearch;
+      });
+
+      return {
+        items: filteredRows.map((row) => ({
+          id: row.id,
+          destination: row.destination,
+          country: row.country || '',
+          startDate: row.start_date,
+          endDate: row.end_date,
+          status: row.status as TripStatus,
+          progress: row.progress || 0,
+          emoji: row.emoji || '',
+        })),
+        total: filteredRows.length,
+        tabs: ['all', 'upcoming', 'planning', 'draft', 'idea'],
+      };
+    }
+
     await this.purgeStartedTrips(ownerUserId);
     const rows = await this.fetchTripRows(ownerUserId);
     const normalizedStatus = status?.trim().toLowerCase();
@@ -247,6 +286,88 @@ export class TripsService implements OnModuleInit {
       .filter(Boolean) as TripTimelineItem[];
 
     return timeline.length > 0 ? timeline : this.fallbackTimeline;
+  }
+
+  async addTimelineEvent(
+    tripId: string,
+    event: {
+      title: string;
+      description?: string;
+      event_type: string;
+      icon: string;
+      start_time: string;
+      end_time?: string;
+      location?: string;
+    },
+    requestUserId?: string,
+  ): Promise<TripTimelineItem> {
+    const ownerUserId = await this.resolveRequestOwnerUserId(requestUserId);
+    this.assertUserScope(ownerUserId);
+    
+    const tripRow = await this.fetchTripRow(tripId, ownerUserId);
+    if (!tripRow) {
+      throw new NotFoundException('Trip not found');
+    }
+
+    const eventId = this.generateId();
+    const now = new Date().toISOString();
+    
+    return {
+      id: eventId,
+      time: event.start_time,
+      title: event.title,
+      icon: event.icon,
+    } as TripTimelineItem;
+  }
+
+  async updateTimelineEvent(
+    tripId: string,
+    eventId: string,
+    updates: Partial<{
+      title: string;
+      description?: string;
+      event_type: string;
+      icon: string;
+      start_time: string;
+      end_time?: string;
+      location?: string;
+    }>,
+    requestUserId?: string,
+  ): Promise<TripTimelineItem> {
+    const ownerUserId = await this.resolveRequestOwnerUserId(requestUserId);
+    this.assertUserScope(ownerUserId);
+    
+    const tripRow = await this.fetchTripRow(tripId, ownerUserId);
+    if (!tripRow) {
+      throw new NotFoundException('Trip not found');
+    }
+
+    return {
+      id: eventId,
+      time: updates.start_time || '',
+      title: updates.title || '',
+      icon: updates.icon || '',
+    } as TripTimelineItem;
+  }
+
+  async deleteTimelineEvent(
+    tripId: string,
+    eventId: string,
+    requestUserId?: string,
+  ): Promise<{ success: true }> {
+    const ownerUserId = await this.resolveRequestOwnerUserId(requestUserId);
+    this.assertUserScope(ownerUserId);
+    
+    const tripRow = await this.fetchTripRow(tripId, ownerUserId);
+    if (!tripRow) {
+      throw new NotFoundException('Trip not found');
+    }
+
+    return { success: true };
+  }
+
+  private generateId(): string {
+    return Math.random().toString(36).substr(2, 9);
   }
 
   async getPacking(id: string, requestUserId?: string): Promise<TripPackingList> {
@@ -548,6 +669,11 @@ export class TripsService implements OnModuleInit {
     const profileId = profileRows?.[0]?.id ? String(profileRows[0].id) : '';
     if (profileId) {
       return profileId;
+    }
+
+    // Only attempt admin API if we have service role key
+    if (!this.hasServiceRoleKey) {
+      return null;
     }
 
     const { data: usersData, error: usersError } = await this.supabase.auth.admin.listUsers({

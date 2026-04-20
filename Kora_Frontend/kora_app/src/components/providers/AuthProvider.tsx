@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setUser = useAuthStore((state) => state.setUser);
   const clearAuth = useAuthStore((state) => state.clearAuth);
+  const setInitialized = useAuthStore((state) => state.setInitialized);
 
   useLayoutEffect(() => {
     const supabase = createClient();
@@ -35,6 +36,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Auth initialization error:', error);
         clearAuth();
+      } finally {
+        setInitialized(true);
       }
     };
 
@@ -44,12 +47,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       syncUser(session?.user);
+      setInitialized(true);
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [setUser, clearAuth]);
+  }, [setUser, clearAuth, setInitialized]);
 
   return <>{children}</>;
 }

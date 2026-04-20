@@ -8,6 +8,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { TripsModule } from './trips/trips.module';
 import { DocumentsModule } from './documents/documents.module';
 import { PackingModule } from './packing/packing.module';
+import { RemindersModule } from './reminders/reminders.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { PackingModule } from './packing/packing.module';
     TripsModule,
     DocumentsModule,
     PackingModule,
+    RemindersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -32,6 +32,34 @@ export class TripsController {
     return this.tripsService.getTimeline(id, requestUserId);
   }
 
+  @Post(':id/timeline')
+  addTimelineEvent(
+    @Param('id') tripId: string,
+    @Body() event: any,
+    @Headers('x-kora-user-id') requestUserId?: string,
+  ) {
+    return this.tripsService.addTimelineEvent(tripId, event, requestUserId);
+  }
+
+  @Patch(':id/timeline/:eventId')
+  updateTimelineEvent(
+    @Param('id') tripId: string,
+    @Param('eventId') eventId: string,
+    @Body() updates: any,
+    @Headers('x-kora-user-id') requestUserId?: string,
+  ) {
+    return this.tripsService.updateTimelineEvent(tripId, eventId, updates, requestUserId);
+  }
+
+  @Delete(':id/timeline/:eventId')
+  deleteTimelineEvent(
+    @Param('id') tripId: string,
+    @Param('eventId') eventId: string,
+    @Headers('x-kora-user-id') requestUserId?: string,
+  ) {
+    return this.tripsService.deleteTimelineEvent(tripId, eventId, requestUserId);
+  }
+
   @Get(':id/packing')
   getPacking(
     @Param('id') id: string,

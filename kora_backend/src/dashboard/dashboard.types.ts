@@ -28,6 +28,7 @@ export interface DashboardQuickAction {
 }
 
 export interface DashboardActiveTrip {
+  id?: string;
   location: string;
   country: string;
   startDate: string;

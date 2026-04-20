@@ -51,6 +51,7 @@ export interface DashboardQuickAction {
 }
 
 export interface DashboardActiveTrip {
+  id?: string;
   location: string;
   country: string;
   startDate: string;
@@ -209,6 +210,73 @@ export interface UpdateTripStatusPayload {
   status: 'Draft' | 'Idea' | 'Planning' | 'Upcoming';
 }
 
+export type ReminderUrgency = 'low' | 'medium' | 'high';
+
+export interface Reminder {
+  id: string;
+  user_id: string;
+  trip_id?: string;
+  title: string;
+  description?: string;
+  due_date: string;
+  urgency: ReminderUrgency;
+  is_completed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReminderSummary {
+  total: number;
+  urgent: number;
+  pending: number;
+  completed: number;
+}
+
+export interface RemindersResponse {
+  items: Reminder[];
+  summary: ReminderSummary;
+}
+
+export interface CreateReminderPayload {
+  title: string;
+  description?: string;
+  due_date: string;
+  urgency?: ReminderUrgency;
+  trip_id?: string;
+}
+
+export interface UpdateReminderPayload {
+  title?: string;
+  description?: string;
+  due_date?: string;
+  urgency?: ReminderUrgency;
+  is_completed?: boolean;
+}
+
+export type EventType = 'transport' | 'stay' | 'activity';
+
+export interface TimelineEvent {
+  id: string;
+  title: string;
+  description?: string;
+  event_type: EventType;
+  icon: string;
+  start_time: string;
+  end_time?: string;
+  location?: string;
+  sort_order: number;
+}
+
+export interface CreateEventPayload {
+  title: string;
+  description?: string;
+  event_type: EventType;
+  icon: string;
+  start_time: string;
+  end_time?: string;
+  location?: string;
+}
+
 class ApiService {
   private baseUrl = API_BASE_URL;
 
@@ -349,12 +417,12 @@ class ApiService {
     return this.handleResponse<TripDetail>(response);
   }
 
-  async getTripTimeline(id: string): Promise<TripTimelineItem[]> {
+  async getTripTimeline(id: string): Promise<TimelineEvent[]> {
     const response = await this.fetchWithUserScope(`${this.baseUrl}/trips/${id}/timeline`, {
       cache: 'no-store',
     });
 
-    return this.handleResponse<TripTimelineItem[]>(response);
+    return this.handleResponse<TimelineEvent[]>(response);
   }
 
   async getTripPacking(id: string): Promise<TripPackingList> {
@@ -515,6 +583,89 @@ class ApiService {
     );
 
     return this.handleResponse<PackingOverviewResponse>(response);
+  }
+
+  async getReminders(): Promise<RemindersResponse> {
+    const response = await this.fetchWithUserScope(`${this.baseUrl}/reminders`, {
+      cache: 'no-store',
+    });
+
+    return this.handleResponse<RemindersResponse>(response);
+  }
+
+  async getReminder(id: string): Promise<Reminder> {
+    const response = await this.fetchWithUserScope(`${this.baseUrl}/reminders/${id}`);
+
+    return this.handleResponse<Reminder>(response);
+  }
+
+  async createReminder(payload: CreateReminderPayload): Promise<Reminder> {
+    const response = await this.fetchWithUserScope(`${this.baseUrl}/reminders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    return this.handleResponse<Reminder>(response);
+  }
+
+  async updateReminder(id: string, payload: UpdateReminderPayload): Promise<Reminder> {
+    const response = await this.fetchWithUserScope(`${this.baseUrl}/reminders/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    return this.handleResponse<Reminder>(response);
+  }
+
+  async deleteReminder(id: string): Promise<{ success: boolean }> {
+    const response = await this.fetchWithUserScope(`${this.baseUrl}/reminders/${id}`, {
+      method: 'DELETE',
+    });
+
+    return this.handleResponse<{ success: boolean }>(response);
+  }
+
+  async addTimelineEvent(tripId: string, payload: CreateEventPayload): Promise<TimelineEvent> {
+    const response = await this.fetchWithUserScope(
+      `${this.baseUrl}/trips/${tripId}/timeline`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    return this.handleResponse<TimelineEvent>(response);
+  }
+
+  async updateTimelineEvent(
+    tripId: string,
+    eventId: string,
+    payload: Partial<CreateEventPayload>,
+  ): Promise<TimelineEvent> {
+    const response = await this.fetchWithUserScope(
+      `${this.baseUrl}/trips/${tripId}/timeline/${eventId}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    return this.handleResponse<TimelineEvent>(response);
+  }
+
+  async deleteTimelineEvent(tripId: string, eventId: string): Promise<{ success: boolean }> {
+    const response = await this.fetchWithUserScope(
+      `${this.baseUrl}/trips/${tripId}/timeline/${eventId}`,
+      {
+        method: 'DELETE',
+      },
+    );
+
+    return this.handleResponse<{ success: boolean }>(response);
   }
 }
 

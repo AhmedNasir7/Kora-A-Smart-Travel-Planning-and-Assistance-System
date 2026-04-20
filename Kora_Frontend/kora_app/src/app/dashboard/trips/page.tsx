@@ -253,12 +253,7 @@ export default function TripsPage() {
           {filteredTrips.length === 0 && (
             <div className="text-center py-20">
               <p className="text-[#A0A5B8] mb-4">No trips found in this category</p>
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="text-[#FF7B54] hover:text-[#FF9F6F] font-semibold"
-              >
-                Create your first trip →
-              </button>
+             
             </div>
           )}
         </div>

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Header } from '@/components/Header';
 import { DashboardFooter } from '@/components/dashboard';
+import { PackingItemModal, type PackingItemFormData } from '@/components/dashboard/PackingItemModal';
+import { ConfirmationDialog } from '@/components/dashboard/ConfirmationDialog';
 import {
   apiService,
   CreatePackingItemPayload,
@@ -19,22 +21,6 @@ type TripContext = {
   country: string;
   startDate: string;
   endDate: string;
-};
-
-const FALLBACK_OVERVIEW: PackingOverviewResponse = {
-  trip: {
-    title: 'Packing List',
-    subtitle: 'Choose a trip to view its packing checklist.',
-  },
-  progress: 0,
-  categories: [
-    { name: 'Clothing', icon: 'clothing', packed: 0, total: 0 },
-    { name: 'Electronics', icon: 'electronics', packed: 0, total: 0 },
-    { name: 'Health', icon: 'health', packed: 0, total: 0 },
-    { name: 'Essentials', icon: 'essentials', packed: 0, total: 0 },
-  ],
-  selectedCategory: 'Clothing',
-  items: [],
 };
 
 function CategoryIcon({ icon }: { icon: PackingCategorySummary['icon'] }) {
@@ -65,8 +51,9 @@ function CategoryIcon({ icon }: { icon: PackingCategorySummary['icon'] }) {
 }
 
 export default function PackingPage() {
-  const [overview, setOverview] = useState<PackingOverviewResponse>(FALLBACK_OVERVIEW);
+  const [overview, setOverview] = useState<PackingOverviewResponse | null>(null);
   const [activeTrip, setActiveTrip] = useState<TripContext | null>(null);
+  const [availableTrips, setAvailableTrips] = useState<Array<{ id: string; destination: string; country: string }>>([]);
   const [selectedCategory, setSelectedCategory] = useState<PackingCategory>('Clothing');
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -79,6 +66,11 @@ export default function PackingPage() {
     item: '',
     category: 'Clothing' as PackingCategory,
   });
+  const [isPackingItemLoading, setIsPackingItemLoading] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    itemId?: string;
+  }>({ isOpen: false });
 
   useEffect(() => {
     setTripIdParam(sanitizeTripId(new URLSearchParams(window.location.search).get('tripId')));
@@ -100,7 +92,7 @@ export default function PackingPage() {
       setSelectedCategory(response.selectedCategory);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load packing data');
-      setOverview(FALLBACK_OVERVIEW);
+      setOverview(null);
       if (category) {
         setSelectedCategory(category);
       }
@@ -132,7 +124,7 @@ export default function PackingPage() {
 
           setActiveTrip(null);
           setResolvedTripId(null);
-          setOverview(FALLBACK_OVERVIEW);
+          setOverview(null);
           setError('No trips are available yet');
           return;
         }
@@ -153,13 +145,46 @@ export default function PackingPage() {
         setOverview(response);
         setSelectedCategory(response.selectedCategory);
         setFormData((prev) => ({ ...prev, category: response.selectedCategory }));
+
+        // Load available trips for the selector
+        try {
+          const tripsResponse = await apiService.getTrips();
+          if (mounted) {
+            setAvailableTrips(
+              tripsResponse.items.map((trip) => ({
+                id: trip.id,
+                destination: trip.destination,
+                country: trip.country,
+              }))
+            );
+          }
+        } catch (tripsErr) {
+          // Silently fail if trips can't be loaded
+          console.error('Failed to load trips for selector:', tripsErr);
+        }
       } catch (err) {
         if (!mounted) {
           return;
         }
 
         setError(err instanceof Error ? err.message : 'Failed to load packing data');
-        setOverview(FALLBACK_OVERVIEW);
+        setOverview(null);
+
+        // Still load available trips for the selector even on error
+        try {
+          const tripsResponse = await apiService.getTrips();
+          if (mounted) {
+            setAvailableTrips(
+              tripsResponse.items.map((trip) => ({
+                id: trip.id,
+                destination: trip.destination,
+                country: trip.country,
+              }))
+            );
+          }
+        } catch (tripsErr) {
+          console.error('Failed to load trips for selector:', tripsErr);
+        }
       } finally {
         if (mounted) {
           setLoading(false);
@@ -175,14 +200,39 @@ export default function PackingPage() {
   }, [queryReady, tripIdParam]);
 
   const selectedItems = useMemo<PackingItem[]>(
-    () => overview.items,
-    [overview.items],
+    () => overview?.items || [],
+    [overview?.items],
   );
 
   const handleCategorySelect = async (category: PackingCategory) => {
     setSelectedCategory(category);
     setFormData((prev) => ({ ...prev, category }));
     await loadOverview(category, resolvedTripId);
+  };
+
+  const handleTripSelect = async (tripId: string) => {
+    setLoading(true);
+    try {
+      const trip = await apiService.getTrip(tripId);
+      const response = await apiService.getPackingOverview(selectedCategory, tripId);
+      
+      setActiveTrip({
+        id: trip.id,
+        destination: trip.destination,
+        country: trip.country,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+      });
+      setResolvedTripId(tripId);
+      setOverview(response);
+      setSelectedCategory(response.selectedCategory);
+      setFormData((prev) => ({ ...prev, category: response.selectedCategory }));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load trip packing data');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleItem = async (id: string) => {
@@ -232,13 +282,97 @@ export default function PackingPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const tripTitle = activeTrip ? `${activeTrip.destination}, ${activeTrip.country}` : overview.trip.title;
+  const handleAddPackingItem = async (formData: PackingItemFormData) => {
+    setIsPackingItemLoading(true);
+    try {
+      const response = await apiService.createPackingItem({
+        name: formData.itemName,
+        category: formData.category as PackingCategory,
+        tripId: resolvedTripId || undefined,
+      });
+      setOverview(response);
+      setSelectedCategory(response.selectedCategory);
+      setShowAddModal(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add packing item');
+    } finally {
+      setIsPackingItemLoading(false);
+    }
+  };
+
+  const handleDeleteItem = (itemId: string) => {
+    setDeleteConfirmation({ isOpen: true, itemId });
+  };
+
+  const handleConfirmDeleteItem = async () => {
+    if (!deleteConfirmation.itemId) return;
+    const id = deleteConfirmation.itemId;
+    try {
+      const response = await apiService.deletePackingItem(id);
+      setOverview(response);
+      setDeleteConfirmation({ isOpen: false });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete item');
+    }
+  };
+
+  const tripTitle = activeTrip ? `${activeTrip.destination}, ${activeTrip.country}` : 'Packing Lists';
   const tripSubtitle = activeTrip
     ? `${activeTrip.startDate} - ${activeTrip.endDate}`
-    : overview.trip.subtitle;
+    : 'Choose a trip to view its packing checklist.';
+
+  // Show loading/error state if overview not loaded
+  if (overview === null && !loading) {
+    return (
+      <main className="min-h-screen bg-[#13151A] flex flex-col select-none">
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-[rgba(255,123,84,0.08)] blur-3xl" />
+          <div className="absolute bottom-32 left-20 w-80 h-80 rounded-full bg-[rgba(255,123,84,0.05)] blur-3xl" />
+        </div>
+
+        <div className="relative z-10 flex-1 flex flex-col">
+          <Header variant="dashboard" />
+
+          <div className="max-w-5xl mx-auto px-6 py-12 mt-16 flex-1 w-full flex flex-col">
+            {/* Header Section */}
+            <div className="mb-12 flex items-start justify-between">
+              <div>
+                <p className="text-sm text-[#FF7B54] font-semibold mb-2">Packing</p>
+                <h1 className="text-4xl font-bold text-white mb-3">{tripTitle}</h1>
+                <p className="text-[#A0A5B8]">{tripSubtitle}</p>
+              </div>
+              <select
+                value={resolvedTripId || ''}
+                onChange={(e) => e.target.value && handleTripSelect(e.target.value)}
+                disabled={availableTrips.length === 0}
+                className="px-4 py-2.5 bg-[#1A1D26] border border-[#FF7B54]/50 hover:border-[#FF7B54] rounded-lg text-white text-sm focus:border-[#FF7B54] focus:outline-none transition-all duration-300 focus:ring-2 focus:ring-[#FF7B54]/30 cursor-pointer shrink-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:border-[#2A2D35]/50"
+              >
+                <option value="">{availableTrips.length === 0 ? 'No trips available' : 'Select a trip...'}</option>
+                {availableTrips.map((trip) => (
+                  <option key={trip.id} value={trip.id}>
+                    {trip.destination}, {trip.country}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Empty State */}
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <p className="text-[#A0A5B8] text-lg mb-2">Nothing to show</p>
+                <p className="text-[#7A7E8C] text-sm">{error || 'No packing data available'}</p>
+              </div>
+            </div>
+          </div>
+
+          <DashboardFooter />
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-[#040B18] flex flex-col select-none">
+    <main className="min-h-screen bg-[#13151A] flex flex-col select-none">
       {/* Background Gradients */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-[rgba(255,123,84,0.08)] blur-3xl" />
@@ -249,38 +383,63 @@ export default function PackingPage() {
       <div className="relative z-10 flex-1 flex flex-col">
         <Header variant="dashboard" />
 
-        <div className="max-w-7xl mx-auto px-6 py-12 mt-16 flex-1 flex flex-col">
+        <div className="max-w-5xl mx-auto px-6 py-12 mt-16 flex-1 w-full flex flex-col">
           {/* Header Section */}
-          <div className="mb-8">
-            <p className="text-[32px] leading-none text-[#FF7B54] font-semibold mb-2">Packing Lists</p>
-            <h1 className="text-6xl font-bold text-white mb-2">{tripTitle}</h1>
-            <p className="text-[#7D8598]">{tripSubtitle}</p>
+          <div className="mb-12 flex items-start justify-between">
+            <div>
+              <p className="text-sm text-[#FF7B54] font-semibold mb-2">Packing</p>
+              <h1 className="text-4xl font-bold text-white mb-3">{tripTitle}</h1>
+              <p className="text-[#A0A5B8]">{tripSubtitle}</p>
+              {loading && <p className="text-xs text-[#7A7E8C] mt-2">Loading packing data...</p>}
+              {error && <p className="text-xs text-[#FF9F6F] mt-2">{error}</p>}
+            </div>
+            <select
+              value={resolvedTripId || ''}
+              onChange={(e) => e.target.value && handleTripSelect(e.target.value)}
+              disabled={availableTrips.length === 0}
+              className="px-4 py-2.5 bg-[#13151A] border border-[#2A2D35] rounded-lg text-white text-sm hover:border-[#2A2D35]/80 focus:border-[#FF7B54] focus:outline-none transition-all duration-300 focus:ring-1 focus:ring-[#FF7B54]/30 cursor-pointer shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">{availableTrips.length === 0 ? 'No trips available' : 'Select a trip...'}</option>
+              {availableTrips.map((trip) => (
+                <option key={trip.id} value={trip.id}>
+                  {trip.destination}, {trip.country}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {error && (
-            <div className="mb-6 text-sm text-[#FFB49F] border border-[#FF7B54]/30 bg-[#FF7B54]/10 rounded-lg px-4 py-3">
-              {error}
+          {/* Stats Tablets */}
+          {overview && (
+            <div className="grid grid-cols-3 gap-4 mb-8">
+              <div className="bg-[#1A1D26] border border-[#2A2D35] rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-[#FF7B54] mb-1">{overview.progress}%</div>
+                <div className="text-xs text-[#A0A5B8]">Progress</div>
+              </div>
+              <div className="bg-[#1A1D26] border border-[#2A2D35] rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-[#00B96B] mb-1">
+                  {overview.items?.filter((item) => item.packed).length || 0}
+                </div>
+                <div className="text-xs text-[#A0A5B8]">Packed</div>
+              </div>
+              <div className="bg-[#1A1D26] border border-[#2A2D35] rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-[#FFB49F] mb-1">
+                  {overview.items?.length || 0}
+                </div>
+                <div className="text-xs text-[#A0A5B8]">Total</div>
+              </div>
             </div>
           )}
 
-          {/* Progress Bar */}
-          <div className="bg-[#1A2333] rounded-3xl px-7 py-5 mb-8">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-[30px] font-semibold text-white">Progress</h2>
-              <p className="text-4xl font-semibold text-[#FF7B54]">{overview.progress}%</p>
+          {loading ? (
+            <div className="text-center py-12">
+              <p className="text-[#A0A5B8]">Loading packing data...</p>
             </div>
-            <div className="w-full bg-[#2B3344] rounded-full h-3 overflow-hidden">
-              <div
-                className="bg-[#FF7B54] h-full rounded-full transition-all duration-500"
-                style={{ width: `${overview.progress}%` }}
-              />
-            </div>
-          </div>
-
+          ) : overview ? (
+            <>
           {/* Two Column Layout */}
           <div className="flex gap-12 flex-1">
             {/* Left Sidebar - Categories */}
-            <div className="w-[360px] flex-shrink-0 space-y-2 pt-8">
+            <div className="w-90 shrink-0 space-y-2 pt-8">
               {overview.categories.map((cat) => {
                 return (
                   <button
@@ -334,31 +493,44 @@ export default function PackingPage() {
               ) : (
                 <div className="space-y-4 pt-6">
                   {selectedItems.map((item) => (
-                    <button
+                    <div
                       key={item.id}
-                      type="button"
-                      onClick={() => {
-                        void toggleItem(item.id);
-                      }}
-                      onMouseDown={(event) => event.preventDefault()}
-                      className={`w-full flex items-center gap-4 text-left px-4 py-3 rounded-lg transition-all duration-150 ${
+                      className={`w-full flex items-center gap-4 px-4 py-3 rounded-lg transition-all duration-150 group ${
                         item.packed 
                           ? 'hover:bg-[#1A2A3A]/40' 
                           : 'hover:bg-[#0F1B2E]/60'
                       }`}
-                      aria-label={`Toggle ${item.name}`}
                     >
-                      <span
-                        className={`w-4 h-4 rounded-full border-2 transition-all duration-150 flex-shrink-0 ${
-                          item.packed
-                            ? 'bg-[#00B96B] border-[#00B96B]'
-                            : 'border-[#7A8499] hover:border-[#9CA5B8]'
-                        }`}
-                      />
-                      <p className={`text-3xl font-semibold ${item.packed ? 'text-[#5D677D] line-through' : 'text-white'}`}>
-                        {item.name}
-                      </p>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void toggleItem(item.id);
+                        }}
+                        onMouseDown={(event) => event.preventDefault()}
+                        className="flex items-center gap-4 text-left flex-1"
+                        aria-label={`Toggle ${item.name}`}
+                      >
+                        <span
+                          className={`w-4 h-4 rounded-full border-2 transition-all duration-150 shrink-0 ${
+                            item.packed
+                              ? 'bg-[#00B96B] border-[#00B96B]'
+                              : 'border-[#7A8499] hover:border-[#9CA5B8]'
+                          }`}
+                        />
+                        <p className={`text-3xl font-semibold ${item.packed ? 'text-[#5D677D] line-through' : 'text-white'}`}>
+                          {item.name}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-[#7D8598] hover:text-[#FF7B54] shrink-0"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -371,94 +543,37 @@ export default function PackingPage() {
               )}
             </div>
           </div>
+
+            </>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-[#A0A5B8]">No trips available. Create a trip to manage packing.</p>
+            </div>
+          )}
         </div>
 
         <DashboardFooter />
       </div>
 
       {/* Add Packing Item Modal */}
-      {showAddModal && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-500"
-            onClick={() => setShowAddModal(false)}
-          />
+      <PackingItemModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSubmit={handleAddPackingItem}
+        isLoading={isPackingItemLoading}
+      />
 
-          {/* Modal */}
-          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-            <div className="bg-[#121A29] border border-[#2A2F3D] rounded-2xl p-8 max-w-xl w-full shadow-2xl shadow-black/50 transition-all duration-500 ease-out">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-4xl font-semibold text-white">Add Packing Item</h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModalValidationError(null);
-                    setShowAddModal(false);
-                  }}
-                  className="text-[#64708A] hover:text-white transition-colors duration-200 p-1"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Form */}
-              <form onSubmit={handleAddItem} className="space-y-6" autoComplete="off" noValidate>
-                {/* Item Name */}
-                <div>
-                  <label className="block text-2xl font-semibold text-white mb-3">
-                    Item Name
-                  </label>
-                  <input
-                    type="text"
-                    name="item"
-                    value={formData.item}
-                    onChange={handleInputChange}
-                    placeholder="e.g. Swimwear"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    className="w-full px-4 py-3 bg-[#13151A] border border-[#FF7B54] rounded-xl text-white placeholder-[#7A7E8C] focus:outline-none"
-                  />
-                  {modalValidationError && (
-                    <p className="mt-2 text-sm text-[#FFB49F]">{modalValidationError}</p>
-                  )}
-                </div>
-
-                {/* Category */}
-                <div>
-                  <label className="block text-2xl font-semibold text-white mb-3">
-                    Category
-                  </label>
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 bg-[#222C3D] border border-[#222C3D] rounded-xl text-white focus:outline-none cursor-pointer"
-                  >
-                    {overview.categories.map((cat) => (
-                      <option key={cat.name} value={cat.name}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Buttons */}
-                <div className="pt-4">
-                  <button
-                    type="submit"
-                    className="w-full px-6 py-3.5 bg-[#FF7B54] hover:bg-[#FF9F6F] text-white font-semibold rounded-xl transition-colors duration-150"
-                  >
-                    Add Items
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </>
-      )}
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={deleteConfirmation.isOpen}
+        title="Delete Item"
+        message="Are you sure you want to delete this item from your packing list? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous
+        onConfirm={handleConfirmDeleteItem}
+        onCancel={() => setDeleteConfirmation({ isOpen: false })}
+      />
     </main>
   );
 }

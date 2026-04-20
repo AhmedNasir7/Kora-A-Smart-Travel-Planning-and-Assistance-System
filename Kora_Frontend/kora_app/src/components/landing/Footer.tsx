@@ -5,7 +5,7 @@ import Link from 'next/link';
 export function Footer() {
   return (
     <footer className="border-t border-[#1a1f2e] bg-[#13151A]">
-      <div className="max-w-7xl mx-auto px-6 py-12">
+      <div className="max-w-7xl mx-auto px-6 py-4">
         <div className="flex flex-col md:flex-row items-center justify-between gap-8">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity group">

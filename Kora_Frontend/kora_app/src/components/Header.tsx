@@ -1,7 +1,8 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -11,9 +12,16 @@ interface HeaderProps {
 
 export function Header({ variant = 'landing' }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isInitialized = useAuthStore((state) => state.isInitialized);
   const user = useAuthStore((state) => state.user);
   const { signOut } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -25,6 +33,29 @@ export function Header({ variant = 'landing' }: HeaderProps) {
     } else {
       router.push('/signin');
     }
+  };
+
+  const handleNavClick = (href: string) => {
+    if (isAuthenticated) {
+      router.push(href);
+    } else {
+      router.push('/signin');
+    }
+  };
+
+  const isLinkActive = (href: string) => {
+    if (href === '/') {
+      return pathname === '/';
+    }
+    return pathname.startsWith(href);
+  };
+
+  const getLinkClasses = (href: string) => {
+    const baseClasses = 'text-[13px] font-medium transition-colors cursor-pointer';
+    const isActive = isLinkActive(href);
+    return isActive
+      ? `${baseClasses} text-[#FF7B54] font-semibold`
+      : `${baseClasses} text-[#a9a59b] hover:text-white`;
   };
 
   return (
@@ -42,38 +73,34 @@ export function Header({ variant = 'landing' }: HeaderProps) {
         <nav className="hidden lg:flex items-center gap-10 flex-1 justify-center">
           <button
             onClick={handleDashboardClick}
-            className="text-[13px] font-medium text-[#a9a59b] hover:text-white transition-colors"
+            className={getLinkClasses('/dashboard')}
           >
             Dashboard
           </button>
-          {isAuthenticated && (
-            <>
-              <Link
-                href="/trips"
-                className="text-[13px] font-medium text-[#a9a59b] hover:text-white transition-colors"
-              >
-                Trips
-              </Link>
-              <Link
-                href="/packing"
-                className="text-[13px] font-medium text-[#a9a59b] hover:text-white transition-colors"
-              >
-                Packing
-              </Link>
-              <Link
-                href="/documents"
-                className="text-[13px] font-medium text-[#a9a59b] hover:text-white transition-colors"
-              >
-                Documents
-              </Link>
-              <Link
-                href="/reminders"
-                className="text-[13px] font-medium text-[#a9a59b] hover:text-white transition-colors"
-              >
-                Reminders
-              </Link>
-            </>
-          )}
+          <button
+            onClick={() => handleNavClick('/trips')}
+            className={getLinkClasses('/trips')}
+          >
+            Trips
+          </button>
+          <button
+            onClick={() => handleNavClick('/packing')}
+            className={getLinkClasses('/packing')}
+          >
+            Packing
+          </button>
+          <button
+            onClick={() => handleNavClick('/documents')}
+            className={getLinkClasses('/documents')}
+          >
+            Documents
+          </button>
+          <button
+            onClick={() => handleNavClick('/reminders')}
+            className={getLinkClasses('/reminders')}
+          >
+            Reminders
+          </button>
         </nav>
 
         {/* Auth - Right */}

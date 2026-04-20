@@ -1,6 +1,6 @@
 export function DashboardFooter() {
   return (
-    <footer className="bg-gradient-to-r from-[#13151A] via-[#1A1D26] to-[#13151A] border-t border-[#2A2D35] mt-16 py-10">
+    <footer className="bg-linear-to-r from-[#13151A] via-[#1A1D26] to-[#13151A] border-t border-[#2A2D35] mt-16 py-4">
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
