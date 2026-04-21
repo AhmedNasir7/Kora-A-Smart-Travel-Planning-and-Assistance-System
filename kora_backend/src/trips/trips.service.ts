@@ -31,115 +31,8 @@ export class TripsService implements OnModuleInit {
   private readonly hasServiceRoleKey: boolean;
   private ownerUserId: string | null = null;
   private ownerUserIdPromise: Promise<string | null> | null = null;
-  private readonly fallbackTrips: TripRecord[] = [
-    {
-      id: '1',
-      destination: 'Tokyo',
-      country: 'Japan',
-      status: 'Upcoming',
-      start_date: '2026-03-15',
-      end_date: '2026-03-22',
-      progress: 75,
-      emoji: '🗼',
-      description:
-        'An amazing trip to explore the vibrant culture and technology of Tokyo.',
-      tasks_remaining: 8,
-    },
-    {
-      id: '2',
-      destination: 'Barcelona',
-      country: 'Spain',
-      status: 'Planning',
-      start_date: '2026-04-05',
-      end_date: '2026-04-12',
-      progress: 40,
-      emoji: '🏖️',
-      description:
-        'A sun-filled Mediterranean escape with architecture, food, and coastlines.',
-      tasks_remaining: 12,
-    },
-    {
-      id: '3',
-      destination: 'New York',
-      country: 'USA',
-      status: 'Draft',
-      start_date: '2026-05-01',
-      end_date: '2026-05-06',
-      progress: 15,
-      emoji: '🗽',
-      description:
-        'A fast-paced city break centered on landmarks, museums, and skyline views.',
-      tasks_remaining: 15,
-    },
-    {
-      id: '4',
-      destination: 'Bali',
-      country: 'Indonesia',
-      status: 'Draft',
-      start_date: '2026-06-10',
-      end_date: '2026-06-18',
-      progress: 5,
-      emoji: '🌴',
-      description:
-        'A relaxed island trip with beaches, viewpoints, and plenty of downtime.',
-      tasks_remaining: 15,
-    },
-    {
-      id: '5',
-      destination: 'Paris',
-      country: 'France',
-      status: 'Idea',
-      start_date: '2026-07-20',
-      end_date: '2026-07-25',
-      progress: 0,
-      emoji: '🗿',
-      description:
-        'An early-stage idea for a classic city trip with art, cafés, and walks.',
-      tasks_remaining: 15,
-    },
-  ];
-  private readonly fallbackTimeline: TripTimelineItem[] = [
-    { id: '1', time: '6:00', title: 'Depart for airport', icon: '✈️' },
-    { id: '2', time: '10:30', title: 'Flight TK 432 — NRT', icon: '✈️' },
-    { id: '3', time: '11:00', title: 'Check-in at Shinjuku Hotel', icon: '🏨' },
-    { id: '4', time: '4:30', title: 'Explore Shinjuku Gyoen', icon: '📸' },
-    { id: '5', time: '6:00', title: 'Bullet train to Kyoto', icon: '🍵' },
-    { id: '6', time: '7:30', title: 'Dinner at HalRameyun', icon: '🚃' },
-    { id: '7', time: '9:00', title: 'Fushimi Inari Shrine', icon: '📍' },
-  ];
-  private readonly fallbackPacking = new Map<string, TripPackingList>([
-    [
-      '1',
-      {
-        title: 'Clothing',
-        categories: [
-          { icon: '👔', name: 'Clothing', count: '2/4' },
-          { icon: '💼', name: 'Essentials', count: '1/1' },
-          { icon: '💊', name: 'Health', count: '2/4' },
-          { icon: '✨', name: 'Accessories', count: '0/2' },
-        ],
-        featuredList: {
-          title: 'Clothing',
-          items: [
-            { item: 'Shirts', count: '(2x3)', checked: true },
-            { item: 'Jeans', count: '(2x2)', checked: true },
-            { item: 'Jacket', count: '', checked: false },
-            { item: 'Coat', count: '', checked: false },
-          ],
-        },
-      },
-    ],
-  ]);
-  private readonly fallbackDocuments = new Map<string, TripDocument[]>([
-    [
-      '1',
-      [
-        { id: '1', name: 'Passport', status: 'ready', type: 'Identity' },
-        { id: '2', name: 'Visa', status: 'ready', type: 'Travel' },
-        { id: '3', name: 'Insurance', status: 'pending', type: 'Travel' },
-      ],
-    ],
-  ]);
+  private readonly fallbackTrips: TripRecord[] = [];
+  private readonly fallbackTimelineByScope = new Map<string, TripTimelineItem[]>();
 
   constructor(private readonly configService: ConfigService) {
     const supabaseUrl = this.configService.get<string>('SUPABASE_URL') || '';
@@ -181,11 +74,7 @@ export class TripsService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    if (!this.supabase) {
-      return;
-    }
-
-    await this.ensureSeedData();
+    return;
   }
 
   async listTrips(
@@ -194,43 +83,7 @@ export class TripsService implements OnModuleInit {
     requestUserId?: string,
   ): Promise<TripApiResponse> {
     const ownerUserId = await this.resolveRequestOwnerUserId(requestUserId);
-    
-    // Return fallback trips if no user context (e.g., unauthenticated landing page requests)
-    if (!ownerUserId) {
-      const normalizedStatus = status?.trim().toLowerCase();
-      const normalizedSearch = search?.trim().toLowerCase();
-
-      const filteredRows = this.fallbackTrips.filter((row) => {
-        const displayStatus = row.status?.toLowerCase() || '';
-        const matchesStatus =
-          !normalizedStatus || normalizedStatus === 'all'
-            ? true
-            : displayStatus === normalizedStatus;
-
-        const matchesSearch = !normalizedSearch
-          ? true
-          : `${row.destination} ${row.country || ''}`
-              .toLowerCase()
-              .includes(normalizedSearch);
-
-        return matchesStatus && matchesSearch;
-      });
-
-      return {
-        items: filteredRows.map((row) => ({
-          id: row.id,
-          destination: row.destination,
-          country: row.country || '',
-          startDate: row.start_date,
-          endDate: row.end_date,
-          status: row.status as TripStatus,
-          progress: row.progress || 0,
-          emoji: row.emoji || '',
-        })),
-        total: filteredRows.length,
-        tabs: ['all', 'upcoming', 'planning', 'draft', 'idea'],
-      };
-    }
+    this.assertUserScope(ownerUserId);
 
     await this.purgeStartedTrips(ownerUserId);
     const rows = await this.fetchTripRows(ownerUserId);
@@ -285,7 +138,7 @@ export class TripsService implements OnModuleInit {
       .map((row) => this.mapTimelineItem(row))
       .filter(Boolean) as TripTimelineItem[];
 
-    return timeline.length > 0 ? timeline : this.fallbackTimeline;
+    return timeline;
   }
 
   async addTimelineEvent(
@@ -309,15 +162,45 @@ export class TripsService implements OnModuleInit {
       throw new NotFoundException('Trip not found');
     }
 
-    const eventId = this.generateId();
-    const now = new Date().toISOString();
-    
-    return {
-      id: eventId,
-      time: event.start_time,
+    const timelineItem: TripTimelineItem = {
+      id: this.generateId(),
+      time: this.formatTimeLabel(event.start_time),
       title: event.title,
-      icon: event.icon,
-    } as TripTimelineItem;
+      icon: event.icon || this.iconForEventType(event.event_type),
+    };
+
+    if (!this.supabase) {
+      const timeline = this.getFallbackTimeline(ownerUserId, tripId);
+      timeline.unshift(timelineItem);
+      this.fallbackTimelineByScope.set(this.timelineScopeKey(ownerUserId, tripId), timeline);
+      return timelineItem;
+    }
+
+    const { data, error } = await this.supabase
+      .from('timeline_events')
+      .insert({
+        trip_id: tripId,
+        user_id: ownerUserId,
+        title: event.title,
+        description: event.description || null,
+        event_type: event.event_type,
+        icon: event.icon,
+        start_time: event.start_time,
+        end_time: event.end_time || null,
+        location: event.location || null,
+      })
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      const timeline = this.getFallbackTimeline(ownerUserId, tripId);
+      timeline.unshift(timelineItem);
+      this.fallbackTimelineByScope.set(this.timelineScopeKey(ownerUserId, tripId), timeline);
+      return timelineItem;
+    }
+
+    const mapped = this.mapTimelineItem(data as DatabaseRow);
+    return mapped || timelineItem;
   }
 
   async updateTimelineEvent(
@@ -342,12 +225,55 @@ export class TripsService implements OnModuleInit {
       throw new NotFoundException('Trip not found');
     }
 
-    return {
-      id: eventId,
-      time: updates.start_time || '',
-      title: updates.title || '',
-      icon: updates.icon || '',
-    } as TripTimelineItem;
+    if (!this.supabase) {
+      const timeline = this.getFallbackTimeline(ownerUserId, tripId);
+      const existing = timeline.find((event) => event.id === eventId);
+      if (!existing) {
+        throw new NotFoundException('Timeline event not found');
+      }
+
+      const updated: TripTimelineItem = {
+        ...existing,
+        title: updates.title ?? existing.title,
+        time: updates.start_time ? this.formatTimeLabel(updates.start_time) : existing.time,
+        icon: updates.icon ?? existing.icon,
+      };
+
+      this.fallbackTimelineByScope.set(
+        this.timelineScopeKey(ownerUserId, tripId),
+        timeline.map((event) => (event.id === eventId ? updated : event)),
+      );
+
+      return updated;
+    }
+
+    const { data, error } = await this.supabase
+      .from('timeline_events')
+      .update({
+        title: updates.title,
+        description: updates.description,
+        event_type: updates.event_type,
+        icon: updates.icon,
+        start_time: updates.start_time,
+        end_time: updates.end_time,
+        location: updates.location,
+      })
+      .eq('id', eventId)
+      .eq('trip_id', tripId)
+      .eq('user_id', ownerUserId)
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      throw new NotFoundException('Timeline event not found or update failed');
+    }
+
+    const mapped = this.mapTimelineItem(data as DatabaseRow);
+    if (!mapped) {
+      throw new ServiceUnavailableException('Failed to map updated timeline event');
+    }
+
+    return mapped;
   }
 
   async deleteTimelineEvent(
@@ -363,11 +289,50 @@ export class TripsService implements OnModuleInit {
       throw new NotFoundException('Trip not found');
     }
 
+    if (!this.supabase) {
+      const timeline = this.getFallbackTimeline(ownerUserId, tripId);
+      const nextTimeline = timeline.filter((event) => event.id !== eventId);
+      if (nextTimeline.length === timeline.length) {
+        throw new NotFoundException('Timeline event not found');
+      }
+
+      this.fallbackTimelineByScope.set(this.timelineScopeKey(ownerUserId, tripId), nextTimeline);
+      return { success: true };
+    }
+
+    const { error } = await this.supabase
+      .from('timeline_events')
+      .delete()
+      .eq('id', eventId)
+      .eq('trip_id', tripId)
+      .eq('user_id', ownerUserId);
+
+    if (error) {
+      throw new NotFoundException('Timeline event not found or delete failed');
+    }
+
     return { success: true };
   }
 
   private generateId(): string {
     return Math.random().toString(36).substr(2, 9);
+  }
+
+  private timelineScopeKey(ownerUserId: string, tripId: string): string {
+    return `${ownerUserId}:${tripId}`;
+  }
+
+  private getFallbackTimeline(ownerUserId: string, tripId: string): TripTimelineItem[] {
+    return this.fallbackTimelineByScope.get(this.timelineScopeKey(ownerUserId, tripId)) || [];
+  }
+
+  private isValidTripDate(value: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return false;
+    }
+
+    const parsed = new Date(`${value}T00:00:00`);
+    return !Number.isNaN(parsed.getTime());
   }
 
   async getPacking(id: string, requestUserId?: string): Promise<TripPackingList> {
@@ -390,7 +355,7 @@ export class TripsService implements OnModuleInit {
     );
 
     const packing = this.buildPackingList(categoryRows, itemRows);
-    return packing || this.fallbackPacking.get(id) || this.defaultPacking();
+    return packing || this.defaultPacking();
   }
 
   async getDocuments(id: string, requestUserId?: string): Promise<TripDocument[]> {
@@ -410,7 +375,7 @@ export class TripsService implements OnModuleInit {
       .map((row) => this.mapDocument(row))
       .filter(Boolean) as TripDocument[];
 
-    return documents.length > 0 ? documents : this.fallbackDocuments.get(id) || [];
+    return documents;
   }
 
   async createTrip(
@@ -422,6 +387,19 @@ export class TripsService implements OnModuleInit {
 
     if (!startDate || !endDate) {
       throw new BadRequestException('Start date and end date are required');
+    }
+
+    if (!this.isValidTripDate(startDate) || !this.isValidTripDate(endDate)) {
+      throw new BadRequestException('Trip dates must be valid ISO dates (YYYY-MM-DD)');
+    }
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    if (startDate < todayIso) {
+      throw new BadRequestException('Trip start date cannot be before today');
+    }
+
+    if (endDate < startDate) {
+      throw new BadRequestException('Trip end date cannot be before start date');
     }
 
     const ownerUserId = await this.resolveRequestOwnerUserId(requestUserId);
@@ -495,11 +473,36 @@ export class TripsService implements OnModuleInit {
     }
 
     const { data, error } = await query.select('*').single();
-    if (error || !data) {
-      throw new NotFoundException('Trip not found or update failed');
+    if (!error && data) {
+      return this.mapCard(data as TripRecord);
     }
 
-    return this.mapCard(data as TripRecord);
+    const shouldRetryWithoutStatus = (error?.message || '').toLowerCase().includes('status');
+    if (shouldRetryWithoutStatus) {
+      let retryQuery = this.supabase
+        .from('trips')
+        .update({ description: nextDescription })
+        .eq('id', id);
+
+      if (ownerUserId) {
+        retryQuery = retryQuery.eq('user_id', ownerUserId);
+      }
+
+      const { data: retryData, error: retryError } = await retryQuery.select('*').single();
+      if (retryError || !retryData) {
+        throw new NotFoundException('Trip not found or update failed');
+      }
+
+      const mergedRow = {
+        ...(retryData as TripRecord),
+        status: updateTripStatusDto.status,
+        description: nextDescription,
+      } as TripRecord;
+
+      return this.mapCard(mergedRow);
+    }
+
+    throw new NotFoundException('Trip not found or update failed');
   }
 
   async deleteTrip(
@@ -623,7 +626,7 @@ export class TripsService implements OnModuleInit {
       return normalizedRequestUserId;
     }
 
-    return this.getOwnerUserId();
+    return null;
   }
 
   private normalizeRequestUserId(requestUserId?: string): string | null {
@@ -639,8 +642,8 @@ export class TripsService implements OnModuleInit {
     return normalized;
   }
 
-  private assertUserScope(ownerUserId: string | null): void {
-    if (this.supabase && !ownerUserId) {
+  private assertUserScope(ownerUserId: string | null): asserts ownerUserId is string {
+    if (!ownerUserId) {
       throw new ServiceUnavailableException(
         'Unable to resolve user context for trip data. Sign in again or set KORA_DEFAULT_USER_ID.',
       );

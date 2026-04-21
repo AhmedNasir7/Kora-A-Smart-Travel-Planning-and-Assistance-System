@@ -18,6 +18,7 @@ export class RemindersService {
   private readonly supabase: SupabaseClient | null;
   private readonly configErrorMessage: string | null;
   private readonly defaultUserId: string | null;
+  private readonly fallbackReminders = new Map<string, Reminder[]>();
 
   constructor(private readonly configService: ConfigService) {
     const supabaseUrl = this.configService.get<string>('SUPABASE_URL') || '';
@@ -59,11 +60,22 @@ export class RemindersService {
 
   async getReminders(requestUserId?: string): Promise<RemindersResponse> {
     const ownerUserId = this.resolveRequestUserId(requestUserId);
+    this.assertUserScope(ownerUserId);
 
     if (!this.supabase) {
+      const reminders = this.getFallbackReminders(ownerUserId).sort(
+        (left, right) => left.due_date.localeCompare(right.due_date),
+      );
+
       return {
-        items: [],
-        summary: { total: 0, urgent: 0, pending: 0, completed: 0 },
+        items: reminders,
+        summary: {
+          total: reminders.length,
+          urgent: reminders.filter((reminder) => reminder.urgency === 'high' && !reminder.is_completed)
+            .length,
+          pending: reminders.filter((reminder) => !reminder.is_completed).length,
+          completed: reminders.filter((reminder) => reminder.is_completed).length,
+        },
       };
     }
 
@@ -92,9 +104,15 @@ export class RemindersService {
 
   async getReminder(id: string, requestUserId?: string): Promise<Reminder> {
     const ownerUserId = this.resolveRequestUserId(requestUserId);
+    this.assertUserScope(ownerUserId);
 
     if (!this.supabase) {
-      throw new NotFoundException('Reminder not found');
+      const reminder = this.getFallbackReminders(ownerUserId).find((item) => item.id === id);
+      if (!reminder) {
+        throw new NotFoundException('Reminder not found');
+      }
+
+      return reminder;
     }
 
     const { data, error } = await this.supabase
@@ -115,10 +133,27 @@ export class RemindersService {
     createReminderDto: CreateReminderDto,
     requestUserId?: string,
   ): Promise<Reminder> {
+    const normalizedTripId = this.normalizeOptionalTripId(createReminderDto.trip_id);
     const ownerUserId = this.resolveRequestUserId(requestUserId);
+    this.assertUserScope(ownerUserId);
 
     if (!this.supabase) {
-      throw new ServiceUnavailableException('Database not available');
+      const now = new Date().toISOString();
+      const reminder: Reminder = {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+        user_id: ownerUserId,
+        trip_id: normalizedTripId || undefined,
+        title: createReminderDto.title,
+        description: createReminderDto.description,
+        due_date: createReminderDto.due_date,
+        urgency: createReminderDto.urgency || 'medium',
+        is_completed: false,
+        created_at: now,
+        updated_at: now,
+      };
+
+      this.fallbackReminders.set(ownerUserId, [reminder, ...this.getFallbackReminders(ownerUserId)]);
+      return reminder;
     }
 
     const { data, error } = await this.supabase
@@ -129,7 +164,7 @@ export class RemindersService {
         description: createReminderDto.description,
         due_date: createReminderDto.due_date,
         urgency: createReminderDto.urgency || 'medium',
-        trip_id: createReminderDto.trip_id,
+        trip_id: normalizedTripId,
         is_completed: false,
       })
       .select()
@@ -147,15 +182,42 @@ export class RemindersService {
     updateReminderDto: UpdateReminderDto,
     requestUserId?: string,
   ): Promise<Reminder> {
+    const normalizedTripId = this.normalizeOptionalTripId(updateReminderDto.trip_id);
     const ownerUserId = this.resolveRequestUserId(requestUserId);
+    this.assertUserScope(ownerUserId);
 
     if (!this.supabase) {
-      throw new ServiceUnavailableException('Database not available');
+      const reminders = this.getFallbackReminders(ownerUserId);
+      const existing = reminders.find((item) => item.id === id);
+      if (!existing) {
+        throw new NotFoundException('Reminder not found or update failed');
+      }
+
+      const updated: Reminder = {
+        ...existing,
+        title: updateReminderDto.title ?? existing.title,
+        description: updateReminderDto.description ?? existing.description,
+        due_date: updateReminderDto.due_date ?? existing.due_date,
+        urgency: updateReminderDto.urgency ?? existing.urgency,
+        trip_id: normalizedTripId ?? existing.trip_id,
+        is_completed: updateReminderDto.is_completed ?? existing.is_completed,
+        updated_at: new Date().toISOString(),
+      };
+
+      this.fallbackReminders.set(
+        ownerUserId,
+        reminders.map((item) => (item.id === id ? updated : item)),
+      );
+
+      return updated;
     }
 
     const { data, error } = await this.supabase
       .from('reminders')
-      .update(updateReminderDto)
+      .update({
+        ...updateReminderDto,
+        trip_id: normalizedTripId,
+      })
       .eq('id', id)
       .eq('user_id', ownerUserId)
       .select()
@@ -170,9 +232,18 @@ export class RemindersService {
 
   async deleteReminder(id: string, requestUserId?: string): Promise<void> {
     const ownerUserId = this.resolveRequestUserId(requestUserId);
+    this.assertUserScope(ownerUserId);
 
     if (!this.supabase) {
-      throw new ServiceUnavailableException('Database not available');
+      const reminders = this.getFallbackReminders(ownerUserId);
+      const nextReminders = reminders.filter((item) => item.id !== id);
+
+      if (nextReminders.length === reminders.length) {
+        throw new NotFoundException('Reminder not found');
+      }
+
+      this.fallbackReminders.set(ownerUserId, nextReminders);
+      return;
     }
 
     const { error } = await this.supabase
@@ -186,15 +257,40 @@ export class RemindersService {
     }
   }
 
-  private resolveRequestUserId(requestUserId?: string): string {
+  private resolveRequestUserId(requestUserId?: string): string | null {
     if (requestUserId && requestUserId.trim() && requestUserId !== 'undefined' && requestUserId !== 'null') {
       return requestUserId;
     }
 
-    if (this.defaultUserId) {
-      return this.defaultUserId;
+    return null;
+  }
+
+  private normalizeOptionalTripId(tripId?: string | null): string | null {
+    if (!tripId) {
+      return null;
     }
 
-    throw new ServiceUnavailableException('No user context available');
+    const normalized = tripId.trim();
+    if (!normalized || normalized === 'undefined' || normalized === 'null') {
+      return null;
+    }
+
+    return normalized;
+  }
+
+  private assertUserScope(ownerUserId: string | null): asserts ownerUserId is string {
+    if (!ownerUserId) {
+      throw new ServiceUnavailableException('No user context available');
+    }
+  }
+
+  private getFallbackReminders(ownerUserId: string): Reminder[] {
+    const existing = this.fallbackReminders.get(ownerUserId);
+    if (existing) {
+      return existing;
+    }
+
+    this.fallbackReminders.set(ownerUserId, []);
+    return this.fallbackReminders.get(ownerUserId) || [];
   }
 }

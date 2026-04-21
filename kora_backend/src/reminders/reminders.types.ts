@@ -38,5 +38,6 @@ export interface UpdateReminderDto {
   description?: string;
   due_date?: string;
   urgency?: ReminderUrgency;
+  trip_id?: string;
   is_completed?: boolean;
 }

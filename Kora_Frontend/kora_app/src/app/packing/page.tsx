@@ -111,6 +111,8 @@ export default function PackingPage() {
     const loadTripPacking = async () => {
       setLoading(true);
       setError(null);
+      setOverview(null);
+      setActiveTrip(null);
 
       try {
         const resolvedTrip = tripIdParam

@@ -50,6 +50,17 @@ function toDisplayStatus(status: DocumentStatus): 'secured' | 'missing' {
   return status === 'verified' ? 'secured' : 'missing';
 }
 
+function toDocumentType(category: string): string {
+  const normalized = category.trim().toLowerCase();
+  if (normalized === 'id') return 'Passport';
+  if (normalized === 'visa') return 'Visa';
+  if (normalized === 'ticket') return 'Ticket';
+  if (normalized === 'booking') return 'Booking';
+  if (normalized === 'insurance') return 'Insurance';
+  if (normalized === 'health') return 'Certificate';
+  return 'Other';
+}
+
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [activeTrip, setActiveTrip] = useState<TripContext | null>(null);
@@ -60,6 +71,7 @@ export default function DocumentsPage() {
   const [queryReady, setQueryReady] = useState(false);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [isDocumentLoading, setIsDocumentLoading] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<DocumentItem | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     documentId?: string;
@@ -80,6 +92,8 @@ export default function DocumentsPage() {
     const loadDocuments = async () => {
       setLoading(true);
       setError(null);
+      setDocuments([]);
+      setActiveTrip(null);
 
       try {
         const resolvedTrip = tripIdParam
@@ -152,18 +166,31 @@ export default function DocumentsPage() {
 
     setIsDocumentLoading(true);
     try {
-      await apiService.createDocument({
-        title: formData.fileName || 'Untitled Document',
-        fileName: formData.fileName || 'Untitled Document',
-        fileUrl: formData.fileUrl || '',
+      const payload = {
+        title:
+          formData.fileName ||
+          selectedDocument?.name ||
+          `${formData.documentType} Document`,
+        fileName:
+          formData.fileName ||
+          selectedDocument?.name ||
+          `${formData.documentType} Document`,
         fileType: formData.documentType,
         tripId: activeTrip.id,
-      });
+        ...(formData.fileUrl ? { fileUrl: formData.fileUrl } : {}),
+      };
+
+      if (selectedDocument) {
+        await apiService.updateDocument(selectedDocument.id, payload);
+      } else {
+        await apiService.createDocument(payload);
+      }
 
       // Reload documents
       const response = await apiService.getDocuments('all', activeTrip.id);
       setDocuments(response.items);
       setIsDocumentModalOpen(false);
+      setSelectedDocument(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add document');
     } finally {
@@ -229,7 +256,10 @@ export default function DocumentsPage() {
             </div>
             <button
               type="button"
-              onClick={() => setIsDocumentModalOpen(true)}
+              onClick={() => {
+                setSelectedDocument(null);
+                setIsDocumentModalOpen(true);
+              }}
               className="px-6 py-2.5 bg-[#FF7B54] hover:bg-[#FF9F6F] text-white font-semibold rounded-full transition-all duration-200 hover:shadow-lg hover:shadow-[#FF7B54]/50 flex items-center gap-2 text-sm shrink-0"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -334,7 +364,14 @@ export default function DocumentsPage() {
                         View
                       </button>
                     ) : (
-                      <button className="text-[#FF7B54] hover:text-[#FF9F6F] transition-colors duration-150 inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDocument(doc);
+                          setIsDocumentModalOpen(true);
+                        }}
+                        className="text-[#FF7B54] hover:text-[#FF9F6F] transition-colors duration-150 inline-flex items-center gap-1"
+                      >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16V8m0 0l-3 3m3-3l3 3M5 16v1a2 2 0 002 2h10a2 2 0 002-2v-1" />
                         </svg>
@@ -366,9 +403,21 @@ export default function DocumentsPage() {
 
         <DocumentModal
           isOpen={isDocumentModalOpen}
-          onClose={() => setIsDocumentModalOpen(false)}
+          onClose={() => {
+            setIsDocumentModalOpen(false);
+            setSelectedDocument(null);
+          }}
           onSubmit={handleAddDocument}
           isLoading={isDocumentLoading}
+          initialData={
+            selectedDocument
+              ? {
+                  documentType: toDocumentType(selectedDocument.category),
+                  fileUrl: '',
+                  fileName: selectedDocument.name,
+                }
+              : undefined
+          }
         />
 
         <ConfirmationDialog

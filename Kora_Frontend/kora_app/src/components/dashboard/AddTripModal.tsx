@@ -6,6 +6,7 @@ interface AddTripModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: FormData) => Promise<void> | void;
+  error?: string | null;
 }
 
 interface FormData {
@@ -147,7 +148,7 @@ const EMOJI_OPTIONS = [
   { emoji: '🧳', label: 'Luggage' },
 ];
 
-export function AddTripModal({ isOpen, onClose, onSubmit }: AddTripModalProps) {
+export function AddTripModal({ isOpen, onClose, onSubmit, error }: AddTripModalProps) {
   const [formData, setFormData] = useState<FormData>({
     destination: 'Tokyo',
     startDate: '',
@@ -193,26 +194,22 @@ export function AddTripModal({ isOpen, onClose, onSubmit }: AddTripModalProps) {
     setFormData((prev) => ({ ...prev, destination: value }));
   };
 
+  if (!isOpen) {
+    return null;
+  }
+
   return (
     <>
       <div
         className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-500"
-        style={{
-          opacity: isOpen ? 1 : 0,
-          pointerEvents: isOpen ? 'auto' : 'none',
-        }}
         onClick={onClose}
       />
 
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
         <div
           className="bg-gradient-to-br from-[#1A1D26] to-[#13151A] border border-[#2A2D35] rounded-3xl p-8 max-w-md w-full pointer-events-auto shadow-2xl shadow-black/50 transition-all duration-500 ease-out"
-          style={{
-            opacity: isOpen ? 1 : 0,
-            transform: isOpen ? 'scale(1) translateY(0)' : 'scale(0.85) translateY(40px)',
-          }}
         >
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-xs text-[#FF7B54] font-bold tracking-widest uppercase mb-2">
                 New Adventure
@@ -226,6 +223,12 @@ export function AddTripModal({ isOpen, onClose, onSubmit }: AddTripModalProps) {
               ✕
             </button>
           </div>
+
+          {error && (
+            <div className="mb-6 rounded-xl border border-[#FF7B54]/30 bg-[#FF7B54]/10 px-4 py-3 text-sm text-[#FFB49F]">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="flex gap-4">

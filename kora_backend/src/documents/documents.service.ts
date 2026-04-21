@@ -22,19 +22,7 @@ export class DocumentsService {
   private ownerUserId: string | null = null;
   private ownerUserIdPromise: Promise<string | null> | null = null;
   private fallbackDocuments: DocumentRecord[] = [
-    {
-      id: '1',
-      trip_id: null,
-      user_id: '00000000-0000-0000-0000-000000000000',
-      title: 'Passport',
-      file_name: 'passport.pdf',
-      file_url: 'https://example.com/passport.pdf',
-      file_type: 'Identity',
-      file_size: 102400,
-      expiry_date: '2027-05-20',
-      created_at: '2024-01-15T00:00:00.000Z',
-      updated_at: '2024-01-15T00:00:00.000Z',
-    },
+    
   ];
 
   constructor(private readonly configService: ConfigService) {
@@ -67,12 +55,13 @@ export class DocumentsService {
     tripId?: string,
     requestUserId?: string,
   ): Promise<DocumentListResponse> {
+    const normalizedTripId = this.normalizeOptionalTripId(tripId);
     const ownerUserId = await this.resolveRequestOwnerUserId(requestUserId);
     this.assertUserScope(ownerUserId);
     if (!this.supabase) {
       const records = this.fallbackDocuments.filter((record) => {
         const matchesOwner = ownerUserId ? record.user_id === ownerUserId : true;
-        const matchesTrip = tripId ? record.trip_id === tripId : true;
+        const matchesTrip = normalizedTripId ? record.trip_id === normalizedTripId : true;
         return matchesOwner && matchesTrip;
       });
 
@@ -95,8 +84,8 @@ export class DocumentsService {
     if (ownerUserId) {
       query = query.eq('user_id', ownerUserId);
     }
-    if (tripId) {
-      query = query.eq('trip_id', tripId);
+    if (normalizedTripId) {
+      query = query.eq('trip_id', normalizedTripId);
     }
 
     const { data, error } = await query;
@@ -120,6 +109,7 @@ export class DocumentsService {
     createDto: CreateDocumentDto,
     requestUserId?: string,
   ): Promise<DocumentItem> {
+    const normalizedTripId = this.normalizeOptionalTripId(createDto.tripId);
     const ownerUserId = await this.resolveRequestOwnerUserId(requestUserId);
     this.assertUserScope(ownerUserId);
     if (!ownerUserId) {
@@ -132,11 +122,11 @@ export class DocumentsService {
       const now = new Date().toISOString();
       const fallbackRecord: DocumentRecord = {
         id: String(this.fallbackDocuments.length + 1),
-        trip_id: createDto.tripId || null,
+        trip_id: normalizedTripId,
         user_id: ownerUserId,
         title: createDto.title,
-        file_name: createDto.fileName,
-        file_url: createDto.fileUrl,
+        file_name: createDto.fileName || createDto.title,
+        file_url: createDto.fileUrl?.trim() || '',
         file_type: createDto.fileType || null,
         file_size: createDto.fileSize || null,
         expiry_date: createDto.expiryDate || null,
@@ -150,11 +140,11 @@ export class DocumentsService {
     const { data, error } = await this.supabase
       .from('documents')
       .insert({
-        trip_id: createDto.tripId || null,
+        trip_id: normalizedTripId,
         user_id: ownerUserId,
         title: createDto.title,
-        file_name: createDto.fileName,
-        file_url: createDto.fileUrl,
+        file_name: createDto.fileName || createDto.title,
+        file_url: createDto.fileUrl?.trim() || '',
         file_type: createDto.fileType || null,
         file_size: createDto.fileSize || null,
         expiry_date: createDto.expiryDate || null,
@@ -174,6 +164,7 @@ export class DocumentsService {
     updateDto: UpdateDocumentDto,
     requestUserId?: string,
   ): Promise<DocumentItem> {
+    const normalizedTripId = this.normalizeOptionalTripId(updateDto.tripId);
     const ownerUserId = await this.resolveRequestOwnerUserId(requestUserId);
     this.assertUserScope(ownerUserId);
     if (!this.supabase) {
@@ -188,10 +179,10 @@ export class DocumentsService {
 
       const updated: DocumentRecord = {
         ...existing,
-        trip_id: updateDto.tripId ?? existing.trip_id,
+        trip_id: normalizedTripId ?? existing.trip_id,
         title: updateDto.title ?? existing.title,
         file_name: updateDto.fileName ?? existing.file_name,
-        file_url: updateDto.fileUrl ?? existing.file_url,
+        file_url: updateDto.fileUrl !== undefined ? updateDto.fileUrl.trim() : existing.file_url,
         file_type: updateDto.fileType ?? existing.file_type,
         file_size: updateDto.fileSize ?? existing.file_size,
         expiry_date: updateDto.expiryDate ?? existing.expiry_date,
@@ -205,15 +196,30 @@ export class DocumentsService {
       return this.mapDocument(updated);
     }
 
-    let query = this.supabase.from('documents').update({
-      trip_id: updateDto.tripId,
-      title: updateDto.title,
-      file_name: updateDto.fileName,
-      file_url: updateDto.fileUrl,
-      file_type: updateDto.fileType,
-      file_size: updateDto.fileSize,
-      expiry_date: updateDto.expiryDate,
-    }).eq('id', id);
+    const updates: Record<string, unknown> = {};
+    if (updateDto.tripId !== undefined) {
+      updates.trip_id = normalizedTripId;
+    }
+    if (updateDto.title !== undefined) {
+      updates.title = updateDto.title;
+    }
+    if (updateDto.fileName !== undefined) {
+      updates.file_name = updateDto.fileName;
+    }
+    if (updateDto.fileUrl !== undefined) {
+      updates.file_url = updateDto.fileUrl.trim();
+    }
+    if (updateDto.fileType !== undefined) {
+      updates.file_type = updateDto.fileType;
+    }
+    if (updateDto.fileSize !== undefined) {
+      updates.file_size = updateDto.fileSize;
+    }
+    if (updateDto.expiryDate !== undefined) {
+      updates.expiry_date = updateDto.expiryDate;
+    }
+
+    let query = this.supabase.from('documents').update(updates).eq('id', id);
 
     if (ownerUserId) {
       query = query.eq('user_id', ownerUserId);
@@ -268,7 +274,7 @@ export class DocumentsService {
       id: record.id,
       name: record.title,
       category: this.documentCategory(record),
-      status: this.documentStatus(record.expiry_date),
+      status: this.documentStatus(record.file_url, record.expiry_date),
       expiryDate: record.expiry_date || '',
       uploadDate: record.created_at,
       tripId: record.trip_id,
@@ -327,9 +333,13 @@ export class DocumentsService {
     return 'Booking';
   }
 
-  private documentStatus(expiryDate: string | null): DocumentStatus {
-    if (!expiryDate) {
+  private documentStatus(fileUrl: string | null, expiryDate: string | null): DocumentStatus {
+    if (!fileUrl) {
       return 'pending';
+    }
+
+    if (!expiryDate) {
+      return 'verified';
     }
 
     const expiry = new Date(`${expiryDate}T00:00:00`);
@@ -359,7 +369,20 @@ export class DocumentsService {
       return normalized;
     }
 
-    return this.getOwnerUserId();
+    return null;
+  }
+
+  private normalizeOptionalTripId(tripId?: string | null): string | null {
+    if (!tripId) {
+      return null;
+    }
+
+    const normalized = tripId.trim();
+    if (!normalized || normalized === 'undefined' || normalized === 'null') {
+      return null;
+    }
+
+    return normalized;
   }
 
   private normalizeRequestUserId(requestUserId?: string): string | null {
@@ -376,7 +399,7 @@ export class DocumentsService {
   }
 
   private assertUserScope(ownerUserId: string | null): void {
-    if (this.supabase && !ownerUserId) {
+    if (!ownerUserId) {
       throw new ServiceUnavailableException(
         'Unable to resolve user context for document data. Sign in again or set KORA_DEFAULT_USER_ID.',
       );

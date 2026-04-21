@@ -25,14 +25,20 @@ function toTripStatus(status: string): TripStatus {
   return 'Draft';
 }
 
+function isValidDateInput(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 export default function TripsPage() {
   const [activeTab, setActiveTab] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [trips, setTrips] = useState<TripCardItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mutatingTripId, setMutatingTripId] = useState<string | null>(null);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   useEffect(() => {
@@ -41,6 +47,7 @@ export default function TripsPage() {
     const loadTrips = async () => {
       setIsLoading(true);
       setError(null);
+      setTrips([]);
       try {
         const response = await apiService.getTrips();
         if (isMounted) {
@@ -69,6 +76,24 @@ export default function TripsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const response = await apiService.getTrips();
+        setTrips((prev) => {
+          if (prev.length > response.items.length) {
+            setSyncNotice('Trips list was refreshed because one or more trips are no longer active.');
+          }
+          return response.items;
+        });
+      } catch {
+        // Keep existing list if background refresh fails.
+      }
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const filteredTrips = useMemo(() => {
     const normalizedTab = activeTab.toLowerCase();
     const normalizedSearch = deferredSearchQuery.trim().toLowerCase();
@@ -94,7 +119,16 @@ export default function TripsPage() {
   }, [trips]);
 
   const handleAddTrip = async (data: TripFormData) => {
+    setModalError(null);
     try {
+      if (!isValidDateInput(data.startDate) || !isValidDateInput(data.endDate)) {
+        throw new Error('Trip dates must be valid YYYY-MM-DD values.');
+      }
+
+      if (data.endDate < data.startDate) {
+        throw new Error('End date cannot be before start date.');
+      }
+
       const selectedStatus = toTripStatus(data.status);
       const createdTrip = await apiService.createTrip({
         destination: data.destination,
@@ -118,6 +152,10 @@ export default function TripsPage() {
       setActiveTab('all');
       setSearchQuery('');
     } catch (createError) {
+      const errorMessage = createError instanceof Error 
+        ? createError.message 
+        : 'Failed to create trip. Please check the dates and try again.';
+      setModalError(errorMessage);
       console.error('Failed to create trip:', createError);
     }
   };
@@ -190,10 +228,16 @@ export default function TripsPage() {
                   {error}
                 </p>
               )}
+              {syncNotice && (
+                <p className="text-xs text-[#FFB49F] mt-2">{syncNotice}</p>
+              )}
             </div>
             <button
               type="button"
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => {
+                setIsModalOpen(true);
+                setModalError(null);
+              }}
               className="px-6 py-2.5 bg-[#FF7B54] hover:bg-[#FF9F6F] text-white font-semibold rounded-full transition-all duration-200 hover:shadow-lg hover:shadow-[#FF7B54]/50 flex items-center gap-2 text-sm shrink-0"
             >
               <span>+</span> New Trip
@@ -268,12 +312,18 @@ export default function TripsPage() {
         <DashboardFooter />
       </div>
 
-      {/* Add Trip Modal */}
-      <AddTripModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleAddTrip}
-      />
+      {/* Add Trip Modal - Only render when open to avoid invisible DOM elements */}
+      {isModalOpen && (
+        <AddTripModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setModalError(null);
+          }}
+          onSubmit={handleAddTrip}
+          error={modalError}
+        />
+      )}
     </main>
   );
 }

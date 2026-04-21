@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Header } from '@/components/Header';
 import { DashboardFooter } from '@/components/dashboard';
 import { AddReminderModal } from '@/components/dashboard/AddReminderModal';
@@ -9,7 +9,6 @@ import { apiService, type Reminder, type ReminderSummary, type CreateReminderPay
 
 export default function RemindersPage() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [summary, setSummary] = useState<ReminderSummary>({ total: 0, urgent: 0, pending: 0, completed: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'urgent' | 'pending' | 'completed'>('all');
@@ -26,11 +25,11 @@ export default function RemindersPage() {
     const loadReminders = async () => {
       setIsLoading(true);
       setError(null);
+      setReminders([]);
       try {
         const data = await apiService.getReminders();
         if (isMounted) {
           setReminders(data.items);
-          setSummary(data.summary);
         }
       } catch (err) {
         if (isMounted) {
@@ -57,6 +56,29 @@ export default function RemindersPage() {
     if (activeTab === 'completed') return reminder.is_completed;
     return true;
   });
+
+  const summary: ReminderSummary = useMemo(
+    () => ({
+      total: reminders.length,
+      urgent: reminders.filter((reminder) => reminder.urgency === 'high' && !reminder.is_completed).length,
+      pending: reminders.filter((reminder) => !reminder.is_completed).length,
+      completed: reminders.filter((reminder) => reminder.is_completed).length,
+    }),
+    [reminders],
+  );
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const data = await apiService.getReminders();
+        setReminders(data.items);
+      } catch {
+        // Keep current data on background sync failures.
+      }
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleToggleReminder = async (id: string, isCompleted: boolean) => {
     try {

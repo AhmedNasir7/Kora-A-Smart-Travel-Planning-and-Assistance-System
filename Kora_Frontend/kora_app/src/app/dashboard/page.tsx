@@ -27,6 +27,7 @@ export default function DashboardPage() {
     const loadDashboard = async () => {
       setIsLoading(true);
       setFetchError(null);
+      setDashboardData(null);
       try {
         const data = await apiService.getDashboard(
           firstName === 'User' ? undefined : firstName,
@@ -54,7 +55,7 @@ export default function DashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, [firstName]);
+  }, [firstName, user?.id]);
 
   if (!dashboardData) {
     return (

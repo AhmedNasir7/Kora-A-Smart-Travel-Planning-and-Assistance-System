@@ -138,7 +138,7 @@ export interface DocumentListResponse {
 export interface CreateDocumentPayload {
   title: string;
   fileName: string;
-  fileUrl: string;
+  fileUrl?: string;
   fileType?: string;
   fileSize?: number;
   expiryDate?: string;

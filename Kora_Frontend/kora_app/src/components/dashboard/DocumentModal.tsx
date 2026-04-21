@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface DocumentModalProps {
   isOpen: boolean;
@@ -43,6 +43,22 @@ export function DocumentModal({
   );
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    setFormData(
+      initialData || {
+        documentType: 'Passport',
+        fileUrl: '',
+        fileName: '',
+      },
+    );
+    setError(null);
+    setIsDragOver(false);
+  }, [initialData, isOpen]);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -106,11 +122,6 @@ export function DocumentModal({
 
     if (!formData.documentType.trim()) {
       setError('Document type is required');
-      return;
-    }
-
-    if (!formData.fileUrl && !formData.fileName) {
-      setError('Please upload a document');
       return;
     }
 
@@ -248,7 +259,7 @@ export function DocumentModal({
               className="flex-1 px-6 py-3 bg-linear-to-r from-[#FF7B54] to-[#FF9F6F] hover:from-[#FF9F6F] hover:to-[#FFA880] text-white font-bold rounded-full transition-all duration-200 disabled:opacity-50"
               disabled={isLoading}
             >
-              {isLoading ? 'Uploading...' : 'Upload Document'}
+              {isLoading ? 'Saving...' : 'Save Document'}
             </button>
           </div>
         </form>

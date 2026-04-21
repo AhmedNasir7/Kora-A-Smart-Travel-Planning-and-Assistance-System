@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUrl, MinLength, IsUUID, IsDateString, IsNumber } from 'class-validator';
+import { IsOptional, IsString, MinLength, IsUUID, IsDateString, IsNumber } from 'class-validator';
 
 export class CreateDocumentDto {
   @IsOptional()
@@ -13,8 +13,10 @@ export class CreateDocumentDto {
   @MinLength(2)
   fileName!: string;
 
-  @IsUrl()
-  fileUrl!: string;
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  fileUrl?: string;
 
   @IsOptional()
   @IsString()

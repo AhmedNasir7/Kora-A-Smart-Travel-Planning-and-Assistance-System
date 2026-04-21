@@ -64,24 +64,20 @@ export function AddReminderModal({ isOpen, onClose, onSubmit }: AddReminderModal
     setFormData((prev) => ({ ...prev, [name]: value || undefined }));
   };
 
+  if (!isOpen) {
+    return null;
+  }
+
   return (
     <>
       <div
         className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-500"
-        style={{
-          opacity: isOpen ? 1 : 0,
-          pointerEvents: isOpen ? 'auto' : 'none',
-        }}
         onClick={onClose}
       />
 
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
         <div
           className="bg-gradient-to-br from-[#1A1D26] to-[#13151A] border border-[#2A2D35] rounded-3xl p-8 max-w-md w-full pointer-events-auto shadow-2xl shadow-black/50 transition-all duration-500 ease-out"
-          style={{
-            opacity: isOpen ? 1 : 0,
-            transform: isOpen ? 'scale(1) translateY(0)' : 'scale(0.85) translateY(40px)',
-          }}
         >
           <div className="flex items-center justify-between mb-8">
             <div>

@@ -41,7 +41,7 @@ export class DashboardService {
         activeTrip: this.buildActiveTrip(tripsData),
       };
     } catch (error) {
-      // Fallback to hardcoded data if fetching fails
+      // Return empty dashboard state instead of demo data if fetching fails.
       return this.getFallbackData(firstName);
     }
   }
@@ -53,7 +53,7 @@ export class DashboardService {
 
     return [
       { label: 'Upcoming Trips', value: upcomingTripsCount || 0 },
-      { label: 'Items to Pack', value: 8 }, // TODO: Fetch from actual packing data
+      { label: 'Items to Pack', value: 0 },
       {
         label: 'Documents',
         value: `${documentsData.total || 0}/5`,
