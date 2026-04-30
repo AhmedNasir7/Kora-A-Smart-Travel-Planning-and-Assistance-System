@@ -12,6 +12,7 @@ import {
   DocumentStatus,
 } from '@/lib/api';
 import { resolvePreferredTrip, sanitizeTripId } from '@/lib/trip-context';
+import { useNotification } from '@/lib/notification-context';
 
 const CATEGORY_TABS = [
   'All',
@@ -62,6 +63,7 @@ function toDocumentType(category: string): string {
 }
 
 export default function DocumentsPage() {
+  const { addToast } = useNotification();
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [activeTrip, setActiveTrip] = useState<TripContext | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<DocumentCategory>('All');
@@ -180,6 +182,7 @@ export default function DocumentsPage() {
         ...(formData.fileUrl ? { fileUrl: formData.fileUrl } : {}),
       };
 
+      const actionType = selectedDocument ? 'updated' : 'created';
       if (selectedDocument) {
         await apiService.updateDocument(selectedDocument.id, payload);
       } else {
@@ -191,8 +194,11 @@ export default function DocumentsPage() {
       setDocuments(response.items);
       setIsDocumentModalOpen(false);
       setSelectedDocument(null);
+      addToast('✅ Success', `Document ${actionType} successfully`, 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add document');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to add document';
+      setError(errorMsg);
+      addToast('❌ Error', errorMsg, 'error');
     } finally {
       setIsDocumentLoading(false);
     }
@@ -209,8 +215,11 @@ export default function DocumentsPage() {
       await apiService.deleteDocument(id);
       setDocuments((prev) => prev.filter((d) => d.id !== id));
       setDeleteConfirmation({ isOpen: false });
+      addToast('✅ Deleted', 'Document deleted successfully', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete document');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to delete document';
+      setError(errorMsg);
+      addToast('❌ Error', errorMsg, 'error');
     }
   };
 
@@ -230,6 +239,21 @@ export default function DocumentsPage() {
     }
 
     return parsed.toISOString().slice(0, 10);
+  };
+
+  const formatFileSize = (bytes: number | undefined): string => {
+    if (!bytes) return 'Unknown size';
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const handleOpenFile = (fileUrl: string | undefined, fileName: string) => {
+    if (!fileUrl) return;
+    // Open file in new tab
+    window.open(fileUrl, '_blank');
   };
 
   return (
@@ -348,20 +372,31 @@ export default function DocumentsPage() {
                   <h3 className="text-sm font-semibold text-white leading-snug">{doc.name}</h3>
                   <p className="text-xs text-[#7D8598]">{normalizeCategory(doc.category)}</p>
                   <p className="text-xs text-[#5B657A]">{activeTrip ? activeTrip.destination : doc.tripId ? 'Trip linked' : 'All Trips'}</p>
+                  {toDisplayStatus(doc.status) === 'secured' && (
+                    <div className="pt-2 mt-2 border-t border-[#1A2436] space-y-1">
+                      <p className="text-xs text-[#16C784] font-medium">✓ File attached</p>
+                      {doc.uploadDate && (
+                        <p className="text-xs text-[#5B657A]">Uploaded: {formatDate(doc.uploadDate)}</p>
+                      )}
+                    </div>
+                  )}
                   {doc.expiryDate ? (
-                    <p className="text-xs text-[#7D8598]">Expires: {formatDate(doc.expiryDate)}</p>
+                    <p className="text-xs text-[#7D8598] mt-2">Expires: {formatDate(doc.expiryDate)}</p>
                   ) : null}
                 </div>
 
                 <div className="pt-3 border-t border-[#162033] text-xs flex items-center justify-between">
                   <div>
                     {toDisplayStatus(doc.status) === 'secured' ? (
-                      <button className="text-[#7D8598] hover:text-white transition-colors duration-150 inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenFile(doc.fileUrl, doc.name)}
+                        className="text-[#16C784] hover:text-[#00D77F] transition-colors duration-150 inline-flex items-center gap-1 font-medium"
+                      >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
-                        View
+                        Download
                       </button>
                     ) : (
                       <button
@@ -375,7 +410,7 @@ export default function DocumentsPage() {
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16V8m0 0l-3 3m3-3l3 3M5 16v1a2 2 0 002 2h10a2 2 0 002-2v-1" />
                         </svg>
-                        Upload
+                        Upload File
                       </button>
                     )}
                   </div>

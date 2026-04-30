@@ -6,6 +6,7 @@ import { TripCard } from '@/components/dashboard/TripCard';
 import { AddTripModal } from '@/components/dashboard/AddTripModal';
 import { DashboardFooter } from '@/components/dashboard';
 import { apiService, type TripCardItem, type TripStatus } from '@/lib/api';
+import { useNotification } from '@/lib/notification-context';
 
 const tabs = ['all', 'upcoming', 'planning', 'draft', 'idea'];
 
@@ -30,6 +31,7 @@ function isValidDateInput(value: string): boolean {
 }
 
 export default function TripsPage() {
+  const { addToast } = useNotification();
   const [activeTab, setActiveTab] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [trips, setTrips] = useState<TripCardItem[]>([]);
@@ -151,11 +153,13 @@ export default function TripsPage() {
       setIsModalOpen(false);
       setActiveTab('all');
       setSearchQuery('');
+      addToast('✅ Success', `Trip to ${data.destination} created successfully`, 'success');
     } catch (createError) {
       const errorMessage = createError instanceof Error 
         ? createError.message 
         : 'Failed to create trip. Please check the dates and try again.';
       setModalError(errorMessage);
+      addToast('❌ Error', errorMessage, 'error');
       console.error('Failed to create trip:', createError);
     }
   };
@@ -172,12 +176,13 @@ export default function TripsPage() {
           trip.id === id ? { ...trip, status: updated.status } : trip,
         ),
       );
+      addToast('✅ Updated', `Trip status changed to ${status}`, 'success');
     } catch (mutationError) {
-      setError(
-        mutationError instanceof Error
+      const errorMsg = mutationError instanceof Error
           ? mutationError.message
-          : 'Failed to update trip status',
-      );
+          : 'Failed to update trip status';
+      setError(errorMsg);
+      addToast('❌ Error', errorMsg, 'error');
     } finally {
       setMutatingTripId(null);
     }
@@ -193,10 +198,11 @@ export default function TripsPage() {
       setMutatingTripId(id);
       await apiService.deleteTrip(id);
       setTrips((currentTrips) => currentTrips.filter((trip) => trip.id !== id));
+      addToast('✅ Deleted', 'Trip deleted successfully', 'success');
     } catch (deleteError) {
-      setError(
-        deleteError instanceof Error ? deleteError.message : 'Failed to delete trip',
-      );
+      const errorMsg = deleteError instanceof Error ? deleteError.message : 'Failed to delete trip';
+      setError(errorMsg);
+      addToast('❌ Error', errorMsg, 'error');
     } finally {
       setMutatingTripId(null);
     }

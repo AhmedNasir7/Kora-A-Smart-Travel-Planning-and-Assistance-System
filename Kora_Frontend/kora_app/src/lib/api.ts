@@ -127,6 +127,7 @@ export interface DocumentItem {
   expiryDate: string;
   uploadDate: string;
   tripId: string | null;
+  fileUrl?: string;
 }
 
 export interface DocumentListResponse {
@@ -666,6 +667,26 @@ class ApiService {
     );
 
     return this.handleResponse<{ success: boolean }>(response);
+  }
+
+  async sendEmailNotification(payload: {
+    type: 'trip_reminder' | 'custom_reminder';
+    user_id: string;
+    user_email: string;
+    title: string;
+    message: string;
+    reminder_id?: string;
+    trip_id?: string;
+  }): Promise<{ success: boolean; message: string }> {
+    const response = await this.fetchWithUserScope(`${this.baseUrl}/reminders/send-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return this.handleResponse<{ success: boolean; message: string }>(response);
   }
 }
 

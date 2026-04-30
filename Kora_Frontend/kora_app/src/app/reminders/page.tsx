@@ -6,8 +6,10 @@ import { DashboardFooter } from '@/components/dashboard';
 import { AddReminderModal } from '@/components/dashboard/AddReminderModal';
 import { ConfirmationDialog } from '@/components/dashboard/ConfirmationDialog';
 import { apiService, type Reminder, type ReminderSummary, type CreateReminderPayload } from '@/lib/api';
+import { useNotification } from '@/lib/notification-context';
 
 export default function RemindersPage() {
+  const { addToast } = useNotification();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,8 +89,12 @@ export default function RemindersPage() {
       setReminders((prev) =>
         prev.map((r) => (r.id === id ? { ...r, is_completed: !isCompleted } : r)),
       );
+      const newStatus = !isCompleted ? 'completed' : 'pending';
+      addToast('✅ Updated', `Reminder marked as ${newStatus}`, 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update reminder');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update reminder';
+      setError(errorMsg);
+      addToast('❌ Error', errorMsg, 'error');
     } finally {
       setIsMutating(null);
     }
@@ -106,8 +112,11 @@ export default function RemindersPage() {
       await apiService.deleteReminder(id);
       setReminders((prev) => prev.filter((r) => r.id !== id));
       setDeleteConfirmation({ isOpen: false });
+      addToast('✅ Deleted', 'Reminder deleted successfully', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete reminder');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to delete reminder';
+      setError(errorMsg);
+      addToast('❌ Error', errorMsg, 'error');
     } finally {
       setIsMutating(null);
     }
@@ -132,8 +141,11 @@ export default function RemindersPage() {
       const newReminder = await apiService.createReminder(payload);
       setReminders((prev) => [newReminder, ...prev]);
       setIsModalOpen(false);
+      addToast('✅ Success', 'Reminder created successfully', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create reminder');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to create reminder';
+      setError(errorMsg);
+      addToast('❌ Error', errorMsg, 'error');
     }
   };
 

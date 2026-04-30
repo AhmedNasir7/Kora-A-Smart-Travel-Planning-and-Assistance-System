@@ -14,6 +14,7 @@ import {
   PackingOverviewResponse,
 } from '@/lib/api';
 import { resolvePreferredTrip, sanitizeTripId } from '@/lib/trip-context';
+import { useNotification } from '@/lib/notification-context';
 
 type TripContext = {
   id: string;
@@ -51,6 +52,7 @@ function CategoryIcon({ icon }: { icon: PackingCategorySummary['icon'] }) {
 }
 
 export default function PackingPage() {
+  const { addToast } = useNotification();
   const [overview, setOverview] = useState<PackingOverviewResponse | null>(null);
   const [activeTrip, setActiveTrip] = useState<TripContext | null>(null);
   const [availableTrips, setAvailableTrips] = useState<Array<{ id: string; destination: string; country: string }>>([]);
@@ -242,8 +244,11 @@ export default function PackingPage() {
       const response = await apiService.togglePackingItem(id, resolvedTripId || undefined);
       setOverview(response);
       setSelectedCategory(response.selectedCategory);
+      addToast('✅ Updated', 'Item status updated', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update item');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update item';
+      setError(errorMsg);
+      addToast('❌ Error', errorMsg, 'error');
     }
   };
 
@@ -271,8 +276,11 @@ export default function PackingPage() {
       setFormData({ item: '', category: response.selectedCategory });
       setModalValidationError(null);
       setShowAddModal(false);
+      addToast('✅ Added', 'Packing item created successfully', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create item');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to create item';
+      setError(errorMsg);
+      addToast('❌ Error', errorMsg, 'error');
     }
   };
 
@@ -295,8 +303,11 @@ export default function PackingPage() {
       setOverview(response);
       setSelectedCategory(response.selectedCategory);
       setShowAddModal(false);
+      addToast('✅ Added', 'Packing item created successfully', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add packing item');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to add packing item';
+      setError(errorMsg);
+      addToast('❌ Error', errorMsg, 'error');
     } finally {
       setIsPackingItemLoading(false);
     }
@@ -313,8 +324,11 @@ export default function PackingPage() {
       const response = await apiService.deletePackingItem(id);
       setOverview(response);
       setDeleteConfirmation({ isOpen: false });
+      addToast('✅ Deleted', 'Packing item deleted successfully', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete item');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to delete item';
+      setError(errorMsg);
+      addToast('❌ Error', errorMsg, 'error');
     }
   };
 

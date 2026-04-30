@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -15,6 +17,7 @@ import {
 
 @Injectable()
 export class RemindersService {
+  private readonly logger = new Logger(RemindersService.name);
   private readonly supabase: SupabaseClient | null;
   private readonly configErrorMessage: string | null;
   private readonly defaultUserId: string | null;
@@ -257,6 +260,208 @@ export class RemindersService {
     }
   }
 
+  async sendEmailNotification(
+    payload: {
+      type: 'trip_reminder' | 'custom_reminder';
+      user_id: string;
+      user_email: string;
+      title: string;
+      message: string;
+      reminder_id?: string;
+      trip_id?: string;
+    },
+    requestUserId?: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const ownerUserId = this.resolveRequestUserId(requestUserId);
+    this.assertUserScope(ownerUserId);
+
+    // Validate payload
+    if (
+      !payload.type ||
+      !payload.user_id ||
+      !payload.user_email ||
+      !payload.title ||
+      !payload.message
+    ) {
+      throw new BadRequestException(
+        'Missing required fields: type, user_id, user_email, title, message',
+      );
+    }
+
+    // Verify user_id matches request user
+    if (payload.user_id !== ownerUserId) {
+      throw new BadRequestException(
+        'user_id in payload must match authenticated user',
+      );
+    }
+
+    try {
+      const resendApiKey =
+        this.configService.get<string>('RESEND_API_KEY') || '';
+      const fromEmail =
+        this.configService.get<string>('RESEND_FROM_EMAIL') ||
+        'onboarding@resend.dev';
+
+      if (!resendApiKey) {
+        throw new ServiceUnavailableException(
+          'RESEND_API_KEY is not configured on the backend',
+        );
+      }
+
+      const subject = `Kora: ${payload.title}`;
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <body style="font-family: Arial, sans-serif; background:#13151A; color:#E9EDF7; padding:24px;">
+            <div style="max-width:600px;margin:0 auto;background:#1A1D26;border-radius:16px;overflow:hidden;border:1px solid #253047;">
+              <div style="padding:24px;background:linear-gradient(135deg,#FF7B54,#FFB49F);color:#fff;">
+                <h1 style="margin:0;font-size:24px;">${payload.type === 'trip_reminder' ? 'Trip Reminder' : 'Reminder'}</h1>
+              </div>
+              <div style="padding:24px;">
+                <p style="margin-top:0;">Hi there,</p>
+                <h2 style="margin:0 0 16px 0;color:#fff;">${payload.title}</h2>
+                <div style="padding:16px;border-left:4px solid #FF7B54;background:#13151A;border-radius:8px;">
+                  <p style="margin:0;line-height:1.6;">${payload.message}</p>
+                </div>
+                <p style="margin-top:20px;line-height:1.6;color:#B5BCCB;">Open Kora to review your trip or update your reminder.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${resendApiKey}`,
+        },
+        body: JSON.stringify({
+          from: fromEmail,
+          to: payload.user_email,
+          subject,
+          html,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new ServiceUnavailableException(
+          `Email service error: ${error}`,
+        );
+      }
+
+      const result = await response.json();
+
+      if (this.supabase && payload.reminder_id) {
+        try {
+          await this.supabase.from('notification_logs').insert({
+            reminder_id: payload.reminder_id,
+            trip_id: payload.trip_id,
+            user_id: payload.user_id,
+            type: payload.type,
+            channel: 'email',
+            sent_at: new Date().toISOString(),
+            recipient_email: payload.user_email,
+            status: 'sent',
+          });
+        } catch {
+          // Logging failure should not block the notification.
+        }
+      }
+
+      return {
+        success: true,
+        message: result.message || 'Email sent successfully',
+      };
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ServiceUnavailableException
+      ) {
+        throw error;
+      }
+      throw new ServiceUnavailableException(
+        error instanceof Error ? error.message : 'Failed to send email',
+      );
+    }
+  }
+
+    async processDueReminderEmails(): Promise<{
+      checked: number;
+      sent: number;
+      skipped: number;
+    }> {
+      if (!this.supabase) {
+        this.logger.warn('Supabase not configured, skipping reminder email processing');
+        return { checked: 0, sent: 0, skipped: 0 };
+      }
+
+      const now = new Date().toISOString();
+      const { data: dueReminders, error } = await this.supabase
+        .from('reminders')
+        .select('*')
+        .eq('is_completed', false)
+        .lte('due_date', now)
+        .order('due_date', { ascending: true });
+
+      if (error) {
+        this.logger.error(`Failed to fetch due reminders: ${error.message}`);
+        throw new ServiceUnavailableException(error.message);
+      }
+
+      const reminders = (dueReminders || []) as Reminder[];
+      this.logger.log(`Found ${reminders.length} due reminders to process`);
+      let sent = 0;
+      let skipped = 0;
+
+      for (const reminder of reminders) {
+        const alreadySent = await this.hasSentReminderEmail(reminder.id);
+        if (alreadySent) {
+          this.logger.debug(`Reminder ${reminder.id} email already sent, skipping`);
+          skipped += 1;
+          continue;
+        }
+
+        const recipientEmail = await this.getUserEmailById(reminder.user_id);
+        if (!recipientEmail) {
+          this.logger.warn(`Could not find email for user ${reminder.user_id}, skipping reminder ${reminder.id}`);
+          skipped += 1;
+          continue;
+        }
+
+        try {
+          this.logger.log(`Sending reminder email to ${recipientEmail} for reminder ${reminder.id}`);
+          await this.sendEmailNotification(
+            {
+              type: 'custom_reminder',
+              user_id: reminder.user_id,
+              user_email: recipientEmail,
+              title: reminder.title,
+              message: reminder.description
+                ? `${reminder.title} - ${reminder.description} is due now.`
+                : `${reminder.title} is due now.`,
+              reminder_id: reminder.id,
+              trip_id: reminder.trip_id,
+            },
+            reminder.user_id,
+          );
+          sent += 1;
+          this.logger.log(`Successfully sent reminder email for reminder ${reminder.id}`);
+        } catch (error) {
+          this.logger.error(`Failed to send reminder email for reminder ${reminder.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          skipped += 1;
+        }
+      }
+
+      this.logger.log(`Reminder email sweep complete: checked=${reminders.length}, sent=${sent}, skipped=${skipped}`);
+      return {
+        checked: reminders.length,
+        sent,
+        skipped,
+      };
+    }
+
   private resolveRequestUserId(requestUserId?: string): string | null {
     if (requestUserId && requestUserId.trim() && requestUserId !== 'undefined' && requestUserId !== 'null') {
       return requestUserId;
@@ -292,5 +497,85 @@ export class RemindersService {
 
     this.fallbackReminders.set(ownerUserId, []);
     return this.fallbackReminders.get(ownerUserId) || [];
+  }
+
+  private async hasSentReminderEmail(reminderId: string): Promise<boolean> {
+    const { data, error } = await this.supabase!
+      .from('notification_logs')
+      .select('id')
+      .eq('reminder_id', reminderId)
+      .eq('channel', 'email')
+      .limit(1);
+
+    if (error) {
+      return false;
+    }
+
+    return Boolean(data && data.length > 0);
+  }
+
+  private async getUserEmailById(userId: string): Promise<string | null> {
+    if (!this.supabase) {
+      this.logger.warn('Supabase not configured, cannot retrieve user email');
+      return null;
+    }
+
+    // Method 1: Try Supabase Auth Admin API
+    try {
+      this.logger.debug(`Attempting to fetch user email via auth admin API for user ${userId}`);
+      const { data, error } = await this.supabase.auth.admin.getUserById(userId);
+
+      if (error) {
+        this.logger.warn(`Auth admin API error for user ${userId}: ${error.message}`);
+      } else if (data?.user?.email) {
+        this.logger.debug(`Found user email via auth admin API: ${data.user.email}`);
+        return data.user.email;
+      } else {
+        this.logger.warn(`Auth admin API returned no email for user ${userId}`);
+      }
+    } catch (err) {
+      this.logger.warn(`Auth admin API exception for user ${userId}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+
+    // Method 2: Try querying from profiles table (fallback)
+    try {
+      this.logger.debug(`Attempting to fetch user email from profiles table for user ${userId}`);
+      const { data, error } = await this.supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        this.logger.debug(`Profiles table query error for user ${userId}: ${error.message}`);
+      } else if (data?.email) {
+        this.logger.log(`Found user email from profiles table: ${data.email}`);
+        return data.email;
+      }
+    } catch (err) {
+      this.logger.debug(`Profiles table query exception for user ${userId}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+
+    // Method 3: Try querying from users table (fallback)
+    try {
+      this.logger.debug(`Attempting to fetch user email from users table for user ${userId}`);
+      const { data, error } = await this.supabase
+        .from('users')
+        .select('email')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        this.logger.debug(`Users table query error for user ${userId}: ${error.message}`);
+      } else if (data?.email) {
+        this.logger.log(`Found user email from users table: ${data.email}`);
+        return data.email;
+      }
+    } catch (err) {
+      this.logger.debug(`Users table query exception for user ${userId}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+
+    this.logger.error(`Could not find email for user ${userId} via any method`);
+    return null;
   }
 }

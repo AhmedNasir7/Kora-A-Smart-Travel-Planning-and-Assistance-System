@@ -62,4 +62,20 @@ export class RemindersController {
     await this.remindersService.deleteReminder(id, userId);
     return { success: true };
   }
+
+  @Post('send-email')
+  async sendEmailNotification(
+    @Body() payload: {
+      type: 'trip_reminder' | 'custom_reminder';
+      user_id: string;
+      user_email: string;
+      title: string;
+      message: string;
+      reminder_id?: string;
+      trip_id?: string;
+    },
+    @Headers('x-kora-user-id') userId?: string,
+  ): Promise<{ success: boolean; message: string }> {
+    return this.remindersService.sendEmailNotification(payload, userId);
+  }
 }
