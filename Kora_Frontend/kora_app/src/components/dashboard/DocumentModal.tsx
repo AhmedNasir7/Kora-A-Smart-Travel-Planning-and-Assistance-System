@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 interface DocumentModalProps {
   isOpen: boolean;
@@ -34,6 +34,7 @@ export function DocumentModal({
   isLoading = false,
   initialData,
 }: DocumentModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState<DocumentFormData>(
     initialData || {
       documentType: 'Passport',
@@ -43,6 +44,13 @@ export function DocumentModal({
   );
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only close if clicking directly on the backdrop (not on modal content)
+    if (e.currentTarget === e.target) {
+      handleClose();
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) {
@@ -148,8 +156,11 @@ export function DocumentModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-8 max-w-4xl w-full pointer-events-auto shadow-2xl shadow-black/50">
+    <div 
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={handleBackdropClick}
+    >
+      <div ref={modalRef} className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-8 max-w-4xl w-full shadow-2xl shadow-black/50 max-h-[90vh] overflow-y-auto">
         {/* Close Button */}
         <div className="flex justify-end mb-6">
           <button

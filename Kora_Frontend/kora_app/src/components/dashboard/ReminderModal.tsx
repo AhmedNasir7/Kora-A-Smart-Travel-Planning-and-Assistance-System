@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 interface ReminderModalProps {
   isOpen: boolean;
@@ -44,6 +44,7 @@ export function ReminderModal({
   initialData,
   isEditMode = false,
 }: ReminderModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState<ReminderFormData>(
     initialData || {
       title: '',
@@ -54,6 +55,13 @@ export function ReminderModal({
     }
   );
   const [error, setError] = useState<string | null>(null);
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only close if clicking directly on the backdrop (not on modal content)
+    if (e.currentTarget === e.target) {
+      handleClose();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +95,11 @@ export function ReminderModal({
         category: 'Travel',
       }
     );
-    setError(null);
+    setEr
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={handleBackdropClick}
+      ref={modalRef}
+    
     onClose();
   };
 

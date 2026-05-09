@@ -1,5 +1,7 @@
 'use client';
 
+import { useRef } from 'react';
+
 interface ConfirmationDialogProps {
   isOpen: boolean;
   title: string;
@@ -23,6 +25,15 @@ export function ConfirmationDialog({
   onConfirm,
   onCancel,
 }: ConfirmationDialogProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only close if clicking directly on the backdrop (not on modal content)
+    if (e.currentTarget === e.target) {
+      onCancel();
+    }
+  };
+
   const handleConfirm = async () => {
     try {
       await onConfirm();
@@ -34,8 +45,11 @@ export function ConfirmationDialog({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-8 max-w-sm w-full pointer-events-auto shadow-2xl shadow-black/50">
+    <div 
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={handleBackdropClick}
+    >
+      <div ref={modalRef} className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-8 max-w-sm w-full shadow-2xl shadow-black/50">
         {/* Title */}
         <h2 className="text-2xl font-bold text-white mb-3">{title}</h2>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { EventType } from '@/lib/api';
 
 interface AddEventModalProps {
@@ -10,6 +10,8 @@ interface AddEventModalProps {
   isLoading?: boolean;
   initialData?: EventFormData;
   isEditMode?: boolean;
+  tripStartDate?: string;
+  tripEndDate?: string;
 }
 
 export interface EventFormData {
@@ -53,7 +55,11 @@ export function AddEventModal({
   isLoading = false,
   initialData,
   isEditMode = false,
+  tripStartDate,
+  tripEndDate,
 }: AddEventModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const preservedDataRef = useRef<EventFormData | null>(null);
   const [formData, setFormData] = useState<EventFormData>(
     initialData || {
       title: '',
@@ -66,6 +72,13 @@ export function AddEventModal({
     }
   );
   const [error, setError] = useState<string | null>(null);
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only close if clicking directly on the backdrop (not on modal content)
+    if (e.currentTarget === e.target) {
+      handleClose();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,15 +99,34 @@ export function AddEventModal({
       return;
     }
 
+    // Validate event times are within trip dates
+    if (tripStartDate && tripEndDate) {
+      const tripStart = new Date(tripStartDate).getTime();
+      const tripEnd = new Date(tripEndDate).getTime();
+      const eventStart = new Date(formData.start_time).getTime();
+      const eventEnd = formData.end_time ? new Date(formData.end_time).getTime() : eventStart;
+
+      if (eventStart < tripStart) {
+        setError(`Event cannot start before trip begins (${tripStartDate})`);
+        return;
+      }
+
+      if (eventEnd > tripEnd) {
+        setError(`Event cannot end after trip ends (${tripEndDate})`);
+        return;
+      }
+    }
+
     try {
       await onSubmit(formData);
-      handleClose();
+      resetForm();
+      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save event');
     }
   };
 
-  const handleClose = () => {
+  const resetForm = () => {
     setFormData(
       initialData || {
         title: '',
@@ -107,14 +139,22 @@ export function AddEventModal({
       }
     );
     setError(null);
+  };
+
+  const handleClose = () => {
+    // Only reset if explicitly cancelling, not just closing
+    resetForm();
     onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-8 max-w-md w-full pointer-events-auto shadow-2xl shadow-black/50 max-h-[90vh] overflow-y-auto">
+    <div 
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={handleBackdropClick}
+    >
+      <div ref={modalRef} className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-8 max-w-md w-full shadow-2xl shadow-black/50 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-white">
@@ -210,31 +250,49 @@ export function AddEventModal({
 
           {/* Start Time */}
           <div>
-            <label className="text-sm font-semibold text-white mb-2 block">
-              Start Time *
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-semibold text-white">
+                Start Time *
+              </label>
+              {tripStartDate && (
+                <span className="text-xs text-[#5D677D]">
+                  Trip: {new Date(tripStartDate).toLocaleDateString()}
+                </span>
+              )}
+            </div>
             <input
               type="datetime-local"
               value={formData.start_time}
               onChange={(e) =>
                 setFormData({ ...formData, start_time: e.target.value })
               }
-              className="w-full px-4 py-2.5 bg-[#13151A] border border-[#2A2D35] rounded-lg text-white focus:border-[#FF7B54] focus:outline-none transition-all duration-200"
+              min={tripStartDate ? new Date(tripStartDate).toISOString().slice(0, 16) : undefined}
+              max={tripEndDate ? new Date(tripEndDate).toISOString().slice(0, 16) : undefined}
+              className="w-full px-4 py-2.5 bg-[#13151A] border border-[#2A2D35] rounded-lg text-white placeholder-[#5D677D] focus:border-[#FF7B54] focus:outline-none transition-all duration-200"
             />
           </div>
 
           {/* End Time */}
           <div>
-            <label className="text-sm font-semibold text-white mb-2 block">
-              End Time (optional)
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-semibold text-white">
+                End Time (optional)
+              </label>
+              {tripEndDate && (
+                <span className="text-xs text-[#5D677D]">
+                  Trip: {new Date(tripEndDate).toLocaleDateString()}
+                </span>
+              )}
+            </div>
             <input
               type="datetime-local"
               value={formData.end_time || ''}
               onChange={(e) =>
                 setFormData({ ...formData, end_time: e.target.value || undefined })
               }
-              className="w-full px-4 py-2.5 bg-[#13151A] border border-[#2A2D35] rounded-lg text-white focus:border-[#FF7B54] focus:outline-none transition-all duration-200"
+              min={formData.start_time || (tripStartDate ? new Date(tripStartDate).toISOString().slice(0, 16) : undefined)}
+              max={tripEndDate ? new Date(tripEndDate).toISOString().slice(0, 16) : undefined}
+              className="w-full px-4 py-2.5 bg-[#13151A] border border-[#2A2D35] rounded-lg text-white placeholder-[#5D677D] focus:border-[#FF7B54] focus:outline-none transition-all duration-200"
             />
           </div>
 

@@ -577,6 +577,7 @@ export default function PackingPage() {
         onClose={() => setShowAddModal(false)}
         onSubmit={handleAddPackingItem}
         isLoading={isPackingItemLoading}
+        selectedCategory={selectedCategory}
       />
 
       {/* Delete Confirmation Dialog */}

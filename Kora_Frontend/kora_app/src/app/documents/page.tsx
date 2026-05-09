@@ -250,10 +250,27 @@ export default function DocumentsPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
-  const handleOpenFile = (fileUrl: string | undefined, fileName: string) => {
+  const handleViewFile = (fileUrl: string | undefined) => {
     if (!fileUrl) return;
-    // Open file in new tab
+    // Open file in new tab for viewing
     window.open(fileUrl, '_blank');
+  };
+
+  const handleDownloadFile = (fileUrl: string | undefined, fileName: string) => {
+    if (!fileUrl) return;
+    
+    // Create a link element and trigger download
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.download = fileName || 'document';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleOpenFile = (fileUrl: string | undefined, fileName: string) => {
+    // For backward compatibility
+    handleDownloadFile(fileUrl, fileName);
   };
 
   return (
@@ -386,18 +403,33 @@ export default function DocumentsPage() {
                 </div>
 
                 <div className="pt-3 border-t border-[#162033] text-xs flex items-center justify-between">
-                  <div>
+                  <div className="flex items-center gap-3">
                     {toDisplayStatus(doc.status) === 'secured' ? (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenFile(doc.fileUrl, doc.name)}
-                        className="text-[#16C784] hover:text-[#00D77F] transition-colors duration-150 inline-flex items-center gap-1 font-medium"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        Download
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleViewFile(doc.fileUrl)}
+                          className="text-[#16C784] hover:text-[#00D77F] transition-colors duration-150 inline-flex items-center gap-1.5 font-medium"
+                          title="Open in new tab"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadFile(doc.fileUrl, doc.name)}
+                          className="text-[#FF7B54] hover:text-[#FF9F6F] transition-colors duration-150 inline-flex items-center gap-1.5 font-medium"
+                          title="Download file"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          Download
+                        </button>
+                      </>
                     ) : (
                       <button
                         type="button"
@@ -416,7 +448,8 @@ export default function DocumentsPage() {
                   </div>
                   <button
                     onClick={() => handleDeleteDocument(doc.id)}
-                    className="text-[#7D8598] hover:text-[#FF7B54] transition-colors duration-150 ml-2"
+                    className="text-[#7D8598] hover:text-[#FF7B54] transition-colors duration-150"
+                    title="Delete document"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

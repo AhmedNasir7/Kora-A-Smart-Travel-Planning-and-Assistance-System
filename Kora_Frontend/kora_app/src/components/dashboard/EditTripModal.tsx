@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { TripStatus } from '@/lib/api';
 
 interface EditTripModalProps {
@@ -53,6 +53,7 @@ export function EditTripModal({
   isLoading = false,
   initialData,
 }: EditTripModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState<EditTripFormData>(
     initialData || {
       destination: '',
@@ -65,6 +66,13 @@ export function EditTripModal({
     }
   );
   const [error, setError] = useState<string | null>(null);
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only close if clicking directly on the backdrop (not on modal content)
+    if (e.currentTarget === e.target) {
+      handleClose();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,8 +130,11 @@ export function EditTripModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-8 max-w-md w-full pointer-events-auto shadow-2xl shadow-black/50 max-h-[90vh] overflow-y-auto">
+    <div 
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={handleBackdropClick}
+    >
+      <div ref={modalRef} className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-8 max-w-md w-full shadow-2xl shadow-black/50 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-white">Edit Trip</h2>

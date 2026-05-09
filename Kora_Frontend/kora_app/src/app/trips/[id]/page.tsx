@@ -352,6 +352,8 @@ export default function TripDetailPage({ params }: { params: Promise<{ id: strin
               : undefined
           }
           isEditMode={!!editingEventId}
+          tripStartDate={trip?.startDate}
+          tripEndDate={trip?.endDate}
         />
 
         {/* Edit Trip Modal */}
