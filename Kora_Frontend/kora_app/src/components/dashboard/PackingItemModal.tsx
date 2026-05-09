@@ -96,7 +96,7 @@ export function PackingItemModal({
       className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={handleBackdropClick}
     >
-      <div ref={modalRef} className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-5 max-w-sm w-full shadow-2xl shadow-black/50">
+      <div ref={modalRef} className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-5 max-w-sm w-full shadow-2xl shadow-black/50 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-white">
@@ -119,7 +119,7 @@ export function PackingItemModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-2.5 flex-1 overflow-hidden flex flex-col">
           {/* Category Display - Fixed/Read-only */}
           <div>
             <label className="text-xs font-semibold text-[#A0A5B8] uppercase tracking-wide mb-1 block">
@@ -142,7 +142,7 @@ export function PackingItemModal({
                 setFormData({ ...formData, itemName: e.target.value })
               }
               placeholder="e.g., T-shirts"
-              className="w-full px-3 py-2 bg-[#13151A] border border-[#2A2D35] rounded-lg text-white placeholder-[#5D677D] focus:border-[#FF7B54] focus:outline-none transition-all duration-200 text-sm"
+              className="w-full px-3 py-1.5 bg-[#13151A] border border-[#2A2D35] rounded-lg text-white placeholder-[#5D677D] focus:border-[#FF7B54] focus:outline-none transition-all duration-200 text-sm"
             />
           </div>
 
@@ -160,7 +160,7 @@ export function PackingItemModal({
                     quantity: Math.max(1, formData.quantity - 1),
                   })
                 }
-                className="px-2 py-1 bg-[#2A2D35] hover:bg-[#3A3F4A] text-white rounded-lg transition-all text-sm font-medium"
+                className="px-2 py-1 bg-[#2A2D35] hover:bg-[#3A3F4A] text-white rounded-lg transition-all text-sm font-medium flex-shrink-0"
               >
                 −
               </button>
@@ -174,7 +174,7 @@ export function PackingItemModal({
                     quantity: parseInt(e.target.value) || 1,
                   })
                 }
-                className="flex-1 px-2.5 py-1 bg-[#13151A] border border-[#2A2D35] rounded-lg text-white text-center focus:border-[#FF7B54] focus:outline-none text-sm"
+                className="w-16 px-2 py-1 bg-[#13151A] border border-[#2A2D35] rounded-lg text-white text-center focus:border-[#FF7B54] focus:outline-none text-sm"
               />
               <button
                 type="button"
@@ -184,7 +184,7 @@ export function PackingItemModal({
                     quantity: formData.quantity + 1,
                   })
                 }
-                className="px-2 py-1 bg-[#2A2D35] hover:bg-[#3A3F4A] text-white rounded-lg transition-all text-sm font-medium"
+                className="px-2 py-1 bg-[#2A2D35] hover:bg-[#3A3F4A] text-white rounded-lg transition-all text-sm font-medium flex-shrink-0"
               >
                 +
               </button>
@@ -200,7 +200,7 @@ export function PackingItemModal({
               onChange={(e) =>
                 setFormData({ ...formData, isPacked: e.target.checked })
               }
-              className="w-4 h-4 rounded cursor-pointer accent-[#FF7B54]"
+              className="w-4 h-4 rounded cursor-pointer accent-[#FF7B54] flex-shrink-0"
             />
             <label htmlFor="isPacked" className="text-xs font-medium text-[#A0A5B8] cursor-pointer flex-1">
               Mark as packed
@@ -219,23 +219,23 @@ export function PackingItemModal({
               }
               placeholder="Add details..."
               rows={1}
-              className="w-full px-3 py-1.5 bg-[#13151A] border border-[#2A2D35] rounded-lg text-white placeholder-[#5D677D] focus:border-[#FF7B54] focus:outline-none transition-all duration-200 resize-none text-sm"
+              className="w-full px-3 py-1 bg-[#13151A] border border-[#2A2D35] rounded-lg text-white placeholder-[#5D677D] focus:border-[#FF7B54] focus:outline-none transition-all duration-200 resize-none text-sm"
             />
           </div>
 
           {/* Actions */}
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-2 mt-auto">
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 px-4 py-2 bg-[#2A2D35] hover:bg-[#3A3F4A] text-white font-semibold rounded-full transition-all duration-200 disabled:opacity-50 text-sm"
+              className="flex-1 px-3 py-1.5 bg-[#2A2D35] hover:bg-[#3A3F4A] text-white font-semibold rounded-full transition-all duration-200 disabled:opacity-50 text-xs"
               disabled={isLoading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-[#FF7B54] to-[#FF9F6F] hover:from-[#FF9F6F] hover:to-[#FFA880] text-white font-semibold rounded-full transition-all duration-200 disabled:opacity-50 text-sm"
+              className="flex-1 px-3 py-1.5 bg-gradient-to-r from-[#FF7B54] to-[#FF9F6F] hover:from-[#FF9F6F] hover:to-[#FFA880] text-white font-semibold rounded-full transition-all duration-200 disabled:opacity-50 text-xs"
               disabled={isLoading}
             >
               {isLoading ? 'Saving...' : isEditMode ? 'Update' : 'Add'}

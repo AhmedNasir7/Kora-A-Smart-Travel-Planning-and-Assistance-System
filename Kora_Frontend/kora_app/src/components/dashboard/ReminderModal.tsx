@@ -95,11 +95,7 @@ export function ReminderModal({
         category: 'Travel',
       }
     );
-    setEr
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={handleBackdropClick}
-      ref={modalRef}
-    
+    setError(null);
     onClose();
   };
 

@@ -8,6 +8,8 @@ export interface DocumentItem {
   expiryDate: string;
   uploadDate: string;
   tripId: string | null;
+  fileUrl?: string;
+  fileSize?: number | null;
 }
 
 export interface DocumentListResponse {

@@ -56,7 +56,7 @@ export class DashboardService {
       { label: 'Items to Pack', value: 0 },
       {
         label: 'Documents',
-        value: `${documentsData.total || 0}/5`,
+        value: documentsData.total || 0,
       },
       {
         label: 'Active Reminders',
@@ -71,6 +71,26 @@ export class DashboardService {
     requestUserId?: string,
   ): Promise<DashboardUpcomingEvent[]> {
     const events: DashboardUpcomingEvent[] = [];
+
+    // Add upcoming trips as events
+    if (tripsData.items && Array.isArray(tripsData.items)) {
+      const upcomingTrips = tripsData.items
+        .filter((t: any) => t.status?.toLowerCase() === 'upcoming')
+        .slice(0, 3)
+        .map((t: any) => ({
+          id: t.id,
+          date: t.startDate ? new Date(t.startDate).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          }) : 'TBD',
+          time: '—',
+          title: `Trip to ${t.destination || 'Unknown'}`,
+          code: t.country || '',
+          color: 'orange' as const,
+        }));
+
+      events.push(...upcomingTrips);
+    }
 
     // Add reminders as events
     if (remindersData.items && Array.isArray(remindersData.items)) {
@@ -169,7 +189,7 @@ export class DashboardService {
       stats: [
         { label: 'Upcoming Trips', value: 0 },
         { label: 'Items to Pack', value: 0 },
-        { label: 'Documents', value: '0/5' },
+        { label: 'Documents', value: 0 },
         { label: 'Active Reminders', value: 0 },
       ],
       upcomingEvents: [],

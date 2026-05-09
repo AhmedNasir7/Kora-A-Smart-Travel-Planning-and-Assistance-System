@@ -154,7 +154,7 @@ export function AddEventModal({
       className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={handleBackdropClick}
     >
-      <div ref={modalRef} className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-8 max-w-md w-full shadow-2xl shadow-black/50 max-h-[90vh] overflow-y-auto">
+      <div ref={modalRef} className="bg-[#1A1D26] border border-[#2A2D35] rounded-3xl p-8 max-w-md w-full shadow-2xl shadow-black/50 max-h-[90vh] overflow-y-auto flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-white">
@@ -199,7 +199,7 @@ export function AddEventModal({
             <label className="text-sm font-semibold text-white mb-2 block">
               Event Type *
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-wrap gap-3">
               {EVENT_TYPES.map((type) => (
                 <button
                   key={type.value}
@@ -211,14 +211,14 @@ export function AddEventModal({
                       icon: type.emoji,
                     })
                   }
-                  className={`py-2.5 px-3 rounded-lg border transition-all duration-200 font-semibold text-sm ${
+                  className={`flex items-center gap-2 py-2 px-3 rounded-lg border transition-all duration-200 font-semibold text-sm min-w-[120px] ${
                     formData.event_type === type.value
                       ? 'bg-[#FF7B54]/20 border-[#FF7B54] text-[#FF7B54]'
                       : 'bg-[#2A2D35]/50 border-[#2A2D35] text-[#A0A5B8] hover:border-[#FF7B54]/50'
                   }`}
                 >
-                  <span className="mr-1">{type.emoji}</span>
-                  {type.label}
+                  <span className="text-lg">{type.emoji}</span>
+                  <span className="truncate">{type.label}</span>
                 </button>
               ))}
             </div>

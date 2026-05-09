@@ -32,27 +32,36 @@ export function UpcomingSection({ events }: UpcomingSectionProps) {
       </div>
 
       <div className="space-y-5 flex-1 overflow-y-auto">
-        {events.map((event) => (
-          <div key={event.id} className="flex items-start gap-4 pb-5 border-b border-[#2A2D35] last:border-0 last:pb-0 hover:opacity-80 transition-opacity duration-200">
-            <div 
-              className={`w-3 h-3 rounded-full ${colorMap[event.color]} shrink-0 mt-2 shadow-lg`}
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-[#7A7E8C] mb-1 font-medium">
-                {event.date}, {event.time}
-              </p>
-              <p className="text-sm text-white font-medium">
-                {event.title}
-                {event.code && <span className="text-[#A0A5B8]"> — {event.code}</span>}
-              </p>
+        {events.length > 0 ? (
+          events.map((event) => (
+            <div key={event.id} className="flex items-start gap-4 pb-5 border-b border-[#2A2D35] last:border-0 last:pb-0 hover:opacity-80 transition-opacity duration-200">
+              <div 
+                className={`w-3 h-3 rounded-full ${colorMap[event.color]} shrink-0 mt-2 shadow-lg`}
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-[#7A7E8C] mb-1 font-medium">
+                  {event.date}, {event.time}
+                </p>
+                <p className="text-sm text-white font-medium">
+                  {event.title}
+                  {event.code && <span className="text-[#A0A5B8]"> — {event.code}</span>}
+                </p>
+              </div>
+              <button className="text-[#A0A5B8] hover:text-[#FF7B54] shrink-0 transition-colors duration-200">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
-            <button className="text-[#A0A5B8] hover:text-[#FF7B54] shrink-0 transition-colors duration-200">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+          ))
+        ) : (
+          <div className="flex items-center justify-center h-full text-center py-8">
+            <div>
+              <p className="text-[#7A7E8C] text-sm mb-2">No upcoming events</p>
+              <p className="text-[#5B657A] text-xs">Plan a trip or set reminders to get started</p>
+            </div>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

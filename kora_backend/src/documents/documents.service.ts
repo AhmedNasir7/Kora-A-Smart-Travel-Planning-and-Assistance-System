@@ -278,6 +278,8 @@ export class DocumentsService {
       expiryDate: record.expiry_date || '',
       uploadDate: record.created_at,
       tripId: record.trip_id,
+      fileUrl: record.file_url || undefined,
+      fileSize: record.file_size ?? null,
     };
   }
 

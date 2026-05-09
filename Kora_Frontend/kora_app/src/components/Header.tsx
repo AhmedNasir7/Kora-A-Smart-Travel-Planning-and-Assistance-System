@@ -58,9 +58,17 @@ export function Header({ variant = 'landing' }: HeaderProps) {
       : `${baseClasses} text-[#a9a59b] hover:text-white`;
   };
 
+  const isDashboardVariant = variant === 'dashboard';
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-[#13151A]/95 backdrop-blur-md border-b border-[#1a1f2e]">
-      <div className="w-full px-8 py-5 flex items-center justify-between">
+    <header className="fixed top-0 left-0 right-0 z-[60] bg-[#13151A]/95 backdrop-blur-md border-b border-[#1a1f2e]">
+      <div
+        className={`w-full px-8 py-5 ${
+          isDashboardVariant
+            ? 'flex flex-wrap items-center justify-between gap-x-4 gap-y-4'
+            : 'flex items-center justify-between'
+        }`}
+      >
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity duration-200 group">
           <div className="w-10 h-10 rounded-lg bg-[#FF7B54] flex items-center justify-center group-hover:bg-[#FF9F6F] transition-all duration-200 shadow-lg shadow-[#FF7B54]/30">
@@ -70,7 +78,13 @@ export function Header({ variant = 'landing' }: HeaderProps) {
         </Link>
 
         {/* Navigation - Center */}
-        <nav className="hidden lg:flex items-center gap-10 flex-1 justify-center">
+        <nav
+          className={
+            isDashboardVariant
+              ? 'order-3 flex w-full flex-wrap items-center justify-center gap-x-6 gap-y-3 text-center md:order-none md:flex-1 md:justify-center md:gap-10'
+              : 'hidden md:flex items-center gap-10 flex-1 justify-center'
+          }
+        >
           <button
             onClick={handleDashboardClick}
             className={getLinkClasses('/dashboard')}
@@ -104,7 +118,7 @@ export function Header({ variant = 'landing' }: HeaderProps) {
         </nav>
 
         {/* Auth - Right */}
-        <div className="flex items-center gap-6">
+        <div className={`flex items-center gap-6 ${isDashboardVariant ? 'order-2' : ''}`}>
           {isAuthenticated ? (
             <>
               <span className="text-[13px] text-[#a9a59b]">
